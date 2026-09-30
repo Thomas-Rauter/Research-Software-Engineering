@@ -228,6 +228,56 @@ to understand, test, or trust only adds to the burden of the package.
 
 
 
+\subsection{Better loud than wrong}
+\label{sec:loud}
+
+When something goes wrong, the package must fail visibly rather than return a
+result that looks valid but cannot be trusted. Given the choice between an
+error and a result that may be wrong, choose the error.
+
+The two outcomes are not symmetric. A failure is annoying and can cost time,
+but it is visible and its cost is bounded: the user sees it, fixes the cause,
+and runs again. A silently wrong result looks exactly like a correct one. It
+flows into further analyses, figures, publications, and decisions, and nobody
+looks for the error, because nothing suggests that there is one. A failure
+costs convenience; a silently wrong result costs correctness, which ranks
+first (Subsection~\ref{sec:quality}).
+
+Silent failures are rarely designed. They usually arise from code that tries
+to be helpful or robust. Typical sources are:
+
+\begin{itemize}
+  \item Catching an error and returning a default value, an empty result, or
+    NaN in place of the result.
+  \item Falling back to a different algorithm, approximation, or data source
+    when the intended one fails or an optional dependency is missing.
+  \item Letting integers overflow, clipping or truncating values to fit a type
+    or range, or broadcasting arrays whose shapes do not match.
+  \item Dropping records that find no match in a join or alignment.
+  \item Continuing after a step has failed, so that an incomplete output looks
+    complete.
+\end{itemize}
+
+Each of these turns a failure the user would have seen into a wrong result
+the user will not see. Let errors that cannot be handled correctly propagate,
+and make every fallback, coercion, and omission explicit.
+
+Being loud does not mean giving up at the first problem. A workflow that
+processes thousands of samples may skip one that fails, and an iterative
+method may return a result that did not converge
+(Subsection~\ref{sec:convergence}), provided the degradation is explicit: it
+is documented or chosen by the caller, the result records what is missing or
+uncertain, and the failure is reported through the channels of
+Subsection~\ref{sec:output}. A tool or workflow that did not complete what was
+asked must also say so in its exit status. What must never happen is a
+degraded result that cannot be told apart from a valid one.
+
+Many rules in these guidelines apply this principle to a particular situation.
+Where none of them covers a case, the default is the same: when in doubt,
+fail.
+
+
+
 \subsection{Pay as you grow}
 \label{sec:role}
 
@@ -686,14 +736,18 @@ the data. A guess applies heuristics to the data to decide what the call
 means, such as transposing a matrix because of its shape, detecting whether
 data are already normalized, inferring units or date formats from the values,
 matching labels approximately, or repairing malformed input. If such an
-interpretation could change the result, the user has to decide.
+interpretation could change the result, the user has to decide: it is a
+scientific choice, and it belongs to the user. A guess also makes the meaning
+of a call depend on the data, so the same code can do different things for
+different datasets. When the guess is wrong, the result is wrong without
+looking wrong (Subsection~\ref{sec:loud}).
 
 Make the user state the choice through an argument, or raise an error that
 lists the possible interpretations. Where automatic selection is genuinely
 useful, offer it as an explicit option, such as a \texttt{method} argument
 with the value \texttt{auto}, and record the choice in the returned result.
 Heuristics may trigger warnings (Subsection~\ref{sec:output}), but must not
-change behavior.
+change behavior: announcing a guess does not make it the user's choice.
 
 
 \subsection{Do not mutate caller data}
@@ -747,10 +801,11 @@ for the user breaks the workflows built on them.
 Correctness outranks this rule (Subsection~\ref{sec:quality}). If the method
 cannot produce a correct result in the incoming precision, raise an error that
 names the required precision, rather than silently upcasting or silently
-returning a degraded result; a user who wants the conversion can make it
-explicitly. Using higher precision for small intermediate quantities, such as
-an accumulator, is part of the method and must be documented as such
-(Subsection~\ref{sec:document-method}); converting the caller's data is not.
+returning a degraded result (Subsection~\ref{sec:loud}); a user who wants the
+conversion can make it explicitly. Using higher precision for small
+intermediate quantities, such as an accumulator, is part of the method and
+must be documented as such (Subsection~\ref{sec:document-method}); converting
+the caller's data is not.
 If the package cannot operate on a given type at all, it should say so with an
 error rather than convert the data at hidden cost.
 
@@ -806,9 +861,9 @@ and each situation calls for exactly one of them:
 \end{itemize}
 
 A warning must not replace an error: if continuing would produce a wrong
-result, raise. Warnings should name the argument or condition that triggered
-them and say how to avoid them by changing the call. Avoid emitting the same
-warning repeatedly, for example inside a loop.
+result, raise (Subsection~\ref{sec:loud}). Warnings should name the argument
+or condition that triggered them and say how to avoid them by changing the
+call. Avoid emitting the same warning repeatedly, for example inside a loop.
 
 Progress reports and diagnostic messages fall outside these three channels.
 They should be opt-in, through an explicit argument or the host stack's
@@ -829,7 +884,7 @@ types, shapes, bounds, units where they are declared, and the semantic
 constraints of the method. Invalid inputs, unsupported combinations of
 arguments, and dangerous settings must produce an error at the boundary, not
 a numerical failure or a wrong result further downstream. Fail loudly and
-early.
+early (Subsection~\ref{sec:loud}).
 
 Error messages should be specific enough that users can recover without
 searching through the full documentation: name the argument, state what was
@@ -883,8 +938,9 @@ of the same deferred computation, or apply it chunk by chunk.
 
 Each user-facing function must have a documented policy for missing values,
 such as NaN, NA, or masked entries: reject, propagate, or mask. Silent
-imputation, dropping, or filling is a scientific bug, not a convenience: it
-replaces a missing measurement with a guess (Subsection~\ref{sec:no-guess}).
+imputation, dropping, or filling is a scientific bug, not a convenience
+(Subsection~\ref{sec:loud}): it replaces a missing measurement with a guess
+(Subsection~\ref{sec:no-guess}).
 
 If the input violates the policy, the function must raise an error that names
 the missing values, rather than fail later with an unrelated numerical error.
@@ -936,12 +992,12 @@ it, but it must not hide it. Where conditioning can be estimated at reasonable
 cost, check it and report an ill-conditioned problem through the channels of
 Subsection~\ref{sec:output}.
 
-Iterative methods must not return a result that did not converge as if it had.
-When the iteration limit is reached or the convergence criterion fails, either
-raise, or return a result that carries an explicit convergence status and
-warn. Each iterative function must document which of the two it does, and its
-result should record diagnostics such as the number of iterations and the
-final residual.
+Iterative methods must not return a result that did not converge as if it had
+(Subsection~\ref{sec:loud}). When the iteration limit is reached or the
+convergence criterion fails, either raise, or return a result that carries an
+explicit convergence status and warn. Each iterative function must document
+which of the two it does, and its result should record diagnostics such as
+the number of iterations and the final residual.
 
 
 
