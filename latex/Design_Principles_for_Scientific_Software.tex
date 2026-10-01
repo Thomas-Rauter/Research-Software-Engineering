@@ -490,6 +490,26 @@ module that the others import (Subsection~\ref{sec:dry}).
 
 
 
+\subsection{No code at large}
+\label{sec:functions}
+
+Library code lives in functions and classes. At module level, only imports,
+named constants (Subsection~\ref{sec:magic-numbers}), and definitions belong.
+A statement that does work there runs on every import
+(Subsection~\ref{sec:import}), cannot be tested in isolation, and tends to
+communicate through global variables. The application layer follows the same
+rule: its logic goes into a main function, and the entry point only calls it.
+
+Prefer functions. Most scientific operations take data and parameters and
+return a result, which a function expresses directly and which is easy to test
+and compose. Use a class when there is state with invariants to protect, such
+as a fitted model, or a result that carries its values together with
+diagnostics and provenance (Subsection~\ref{sec:traceability}). A class that
+only groups functions, or stores its arguments for its methods to read back,
+should be a function.
+
+
+
 \subsection{DRY: Don't repeat yourself}
 \label{sec:dry}
 
@@ -827,6 +847,7 @@ Subsection~\ref{sec:validation-cost}.
 
 
 \subsection{Importing the package has no side effects}
+\label{sec:import}
 
 Importing or loading the package must not download data, compile extensions,
 print, select backends, configure logging, or read from or write to the
@@ -946,6 +967,31 @@ If the input violates the policy, the function must raise an error that names
 the missing values, rather than fail later with an unrelated numerical error.
 Checking for missing values is a data check in the sense of
 Subsection~\ref{sec:validation-cost}.
+
+
+
+\subsection{Wear belt and braces}
+\label{sec:assertions}
+
+Tests check the package on the inputs someone thought of, but real data reach
+paths that no test exercised. A bug that produces a silently wrong result is
+the worst failure scientific software can have, so the key invariants of a
+method should also be checked in the code itself, on every run. Such
+assertions complement the tests; they do not replace them.
+
+Assert what must hold if the code is correct and whose violation would
+otherwise go unnoticed, such as a normalization, a conservation law, or the
+alignment of identifiers after a reordering. These are often the same
+invariants the tests check (Subsection~\ref{sec:invariants}). Keep assertions
+cheap (Subsection~\ref{sec:cost}), and do not assert what holds by
+construction or what validation already guarantees; mistakes of the caller
+belong to validation (Subsection~\ref{sec:validation}).
+
+A failed assertion means the package has a bug. It must raise, never warn,
+and its message should say so and ask for a report, rather than tell the user
+to change the call. Assertions must run in every configuration; where the
+assertion mechanism of the host stack can be disabled, raise explicitly
+instead.
 
 
 

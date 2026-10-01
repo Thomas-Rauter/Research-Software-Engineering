@@ -1,0 +1,13 @@
+# GitHub Pages builds the website from this branch with Jekyll. README.md
+# becomes the landing page, and the PDFs are served from pdf/.
+
+# Keep equal to the first heading of README.md, or the theme shows both.
+title: Scientific Software Guidelines
+
+# Publish only the landing page and the PDFs.
+exclude:
+  - latex
+  - build
+  - Makefile
+  - AGENTS.md
+  - CLAUDE.md

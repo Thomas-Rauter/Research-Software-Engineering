@@ -1,0 +1,23 @@
+# `make pdf` keeps auxiliary files inside the container. These patterns cover
+# builds run outside Docker.
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.xdv
+/latex/*.pdf
+
+# Local preview of the website
+/_site/
+/.jekyll-cache/

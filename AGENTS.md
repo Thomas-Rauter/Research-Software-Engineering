@@ -2,8 +2,11 @@
 
 ## What this repository is
 
-A single document, *Design Principles for Scientific Software*: guidelines for
-turning science into software that several people use over and over
+A collection of LaTeX documents, each built into a PDF and published on the
+repository's GitHub Pages website.
+
+The main document is *Design Principles for Scientific Software*: guidelines
+for turning science into software that several people use over and over
 (libraries, command-line tools, and workflows), whether it is published or
 kept within an organization. One-off analysis scripts are out of scope. The
 guidelines are independent of programming language and scientific field.
@@ -22,10 +25,15 @@ consistency, and tightening the prose.
 
 ## Files
 
-- `Design_Principles_for_Scientific_Software.tex` is the source of truth. All
-  edits go here.
-- `Design_Principles_for_Scientific_Software.pdf` is built from the `.tex`
-  and committed. `index.html` only redirects to it.
+- `latex/NAME.tex` is the source of a document and the source of truth. All
+  edits go here, for example to
+  `latex/Design_Principles_for_Scientific_Software.tex`.
+- `pdf/NAME.pdf` is built from it and committed. The website serves the PDFs
+  from this directory.
+- `README.md` is the landing page of the website. For every document it gives
+  the title, linked to the PDF, and a short description.
+- `Makefile` and `build/Dockerfile` build the PDFs; `build/README.md`
+  explains how. `_config.yml` configures the website.
 
 ## Structure of the document
 
@@ -115,11 +123,14 @@ When proposing a title, offer several options.
 - Match the source formatting: lines hard-wrapped at about 80 columns, blank
   lines between subsections, and `% ====` banner comments around each
   `\section`.
-- Build with `latexmk -pdf Design_Principles_for_Scientific_Software.tex`,
-  and remove the auxiliary files afterwards with `latexmk -c`. The build
-  must finish without undefined references. Commit the rebuilt PDF together
-  with the `.tex` so the two stay in sync, and do not commit auxiliary
-  files.
+- Build with `make pdf Design_Principles_for_Scientific_Software`. It runs
+  latexmk in a Docker container and writes only the PDF to `pdf/`; the
+  auxiliary files stay in the container. The build fails on undefined
+  references. Commit the rebuilt PDF together with the `.tex` so the two stay
+  in sync.
+- A new document also needs an entry in `README.md`: the title, linked to
+  the PDF, and a short description. `make check` verifies that every document
+  has a PDF and an entry.
 
 ## Collaboration
 
