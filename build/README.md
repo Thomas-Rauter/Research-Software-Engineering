@@ -5,7 +5,7 @@ Docker container, so the result does not depend on the TeX installation of
 the machine. Run all commands from the repository root.
 
 ```sh
-make pdf Design_Principles_for_Scientific_Software   # one document
+make pdf Design_Principles_for_Research_Software   # one document
 make pdf                                             # every document
 make check                                           # PDFs and README entries complete?
 ```

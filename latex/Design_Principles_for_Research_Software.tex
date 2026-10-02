@@ -82,12 +82,16 @@
 % ==========================================================
 
 \newcommand{\DocAuthor}{}
-\newcommand{\DocTitle}{Design Principles for Scientific Software}
+\newcommand{\DocTitle}{Design Principles for Research Software}
 \newcommand{\DocSubtitle}{}
 
 \setcounter{tocdepth}{2}
+\renewcommand{\cftpartfont}{\large\bfseries\color{myblue}}
 
 \usepackage{tikz}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
 
 % ==================
 % Start the document
@@ -102,11 +106,81 @@
 \addcontentsline{toc}{section}{About these guidelines}
 % ==========================================================
 
-These guidelines apply wherever science is turned into software that several
-people use over and over, whether it is published openly or kept within an
-organization, and independent of programming language and scientific field.
-Usually the science is known; the task is to make it reliable, automated, and
-fit to run at scale. One-off analysis scripts are out of scope.
+These guidelines are for research software: all code written for a research
+purpose, in academia or in industry, from the script a PhD student writes for
+one analysis to the library or workflow that a community or a company relies
+on. They are independent of programming language and scientific field.
+
+Research software stands on a ladder, from code that only its author runs to
+software that others build on and base publications and decisions on. Most
+software starts at the bottom, and much of it should stay there. The
+principles in these guidelines are what it takes to climb. Usually the
+science is known; the task is to make it reliable, automated, and fit to run
+at scale.
+
+
+
+\subsection*{Ladder of Research Software}
+\phantomsection
+\addcontentsline{toc}{subsection}{Ladder of Research Software}
+\label{sec:ladder}
+
+Research software stands on one of four rungs (Table~\ref{tab:ladder}). Which
+one depends on the role of the software: how many people use it, how often
+and for how long, on how much data, and what a wrong result would cost. The
+higher the rung, the more depends on the software, and the more of these
+guidelines it has to follow.
+
+\begin{table}[h]
+\centering
+\small
+\caption{The Ladder of Research Software.}
+\label{tab:ladder}
+\begin{tabularx}{\textwidth}{@{}lLLL@{}}
+  \toprule
+  Rung & Who uses it & Examples & What it takes \\
+  \midrule
+  1 Personal
+    & Its author, for one analysis
+    & The script a PhD student writes to try out an idea
+    & Nothing yet; the principles already make the code easier to trust \\
+  \addlinespace
+  2 Shared
+    & Its author again and again, or colleagues
+    & A script passed around a group; a workflow that a lab reruns for every
+      new batch of samples
+    & Every \emph{must}: the floor; the \emph{should}s where they pay off \\
+  \addlinespace
+  3 Released
+    & People its authors do not know and cannot support one by one
+    & A published package; a workflow shared between institutions; a tool
+      used across the departments of a company
+    & The floor and, as a rule, the \emph{should}s; documentation that users
+      can work from alone; a stability commitment \\
+  \addlinespace
+  4 Infrastructure
+    & Others who build on it or base decisions on it
+    & A library that many packages depend on; a workflow that processes every
+      sample of a core facility; software whose results enter a drug approval
+      or an emission limit
+    & The floor and, as a rule, the \emph{should}s; testing and documentation
+      as thorough as the cost of a wrong result demands; long stability
+      commitments and controlled changes \\
+  \bottomrule
+\end{tabularx}
+\end{table}
+
+The requirements marked \emph{must} are the floor from the second rung on;
+most of them cost little and prevent wrong results. What rises with each rung
+is everything above the floor: how thoroughly the \emph{should}s are
+followed, the depth of testing and documentation, the effort put into
+performance, and the length of the stability commitment
+(Subsection~\ref{sec:stable-api}).
+
+A high cost of a wrong result can put software on a higher rung than its
+number of users suggests: a script that only its author runs, but whose
+numbers go into a regulatory submission, is not personal software. When and
+how to climb is the subject of Subsection~\ref{sec:role}.
 
 
 
@@ -119,14 +193,14 @@ The guidelines distinguish requirements from defaults. The following words
 carry a fixed meaning throughout, in the spirit of RFC~2119:
 
 \begin{description}
-  \item[must, must not] A requirement. Code that violates it is a defect and
-    is fixed, not justified.
+  \item[must, must not] A requirement for all software from the second rung of
+    the \hyperref[sec:ladder]{Ladder of Research Software} on. Code that
+    violates it is a defect and is fixed, not justified.
   \item[should, should not] A strong default. A deviation is acceptable only
     for a concrete reason, which is stated where the deviation occurs, for
-    example in a code comment or in the review. The role of the software
-    (Subsection~\ref{sec:role}) is such a reason; it is stated once for the
-    whole package, for example in its documentation, rather than at each
-    deviation.
+    example in a code comment or in the review. The rung of the software on
+    the ladder is such a reason; it is stated once for the whole package, for
+    example in its documentation, rather than at each deviation.
   \item[may] Permitted, but not required.
 \end{description}
 
@@ -136,22 +210,91 @@ Subsection~\ref{sec:quality} decide.
 
 
 
+\subsection*{Library code and workflow code}
+\phantomsection
+\addcontentsline{toc}{subsection}{Library code and workflow code}
+\label{sec:library}
+
+The code of research software does one of two jobs, and the Hollywood
+principle tells them apart: \emph{don't call us, we'll call you}.
+
+\textbf{Library code} is a collection of reusable building blocks, such as
+functions, classes, and data types, that callers use in their own code. It
+does not decide what happens or in which order: the caller owns the program
+and decides. Library code should provide composable primitives that users
+call from their own scripts, notebooks, workflows, and host-stack tools, and
+should not take over the main program, the solver or simulation loop, the
+data model, or the analysis workflow. Where the method needs code from the
+user, such as an objective function, a model, or the right-hand side of a
+differential equation, accept it as an ordinary function argument. Requiring
+users to subclass package classes or to register code with a package-managed
+lifecycle turns library code into a framework on top of the host stack.
+
+\textbf{Workflow code} follows the Hollywood principle: it owns the program
+and calls other code to do the work. A workflow is a defined sequence of
+steps that carries out a task from start to finish. It encodes the order of
+the steps and the inputs and outputs of each, and often branching, retries,
+parallel execution, and scheduling; the user mostly supplies inputs and
+configuration. Workflow definitions, for example for Snakemake, Nextflow, or
+Make, and the scripts of their steps are workflow code. So is the main
+function of a command-line tool, which reads the arguments and the input,
+calls library code, and writes the output: each command is a small workflow.
+
+In a kitchen, library code is the knives, the pans, and the techniques;
+workflow code is the recipe, which says to chop this, then saut\'e that for
+five minutes, then combine.
+
+A package is the unit of distribution: what is installed, versioned, and
+shared. It may contain either kind of code, or both, and mixing them is
+common. A package may offer library functions for users who want fine
+control together with a command that chains them into a standard analysis,
+or ship workflow definitions as files next to its library code. A
+command-line tool that does one job, such as sorting sequence alignments or
+regridding a climate field, is therefore library code behind a thin layer of
+workflow code, while a tool that runs a whole analysis by calling other tools
+in a fixed order is a workflow, even when it is started like any other
+command.
+
+When a package contains both, workflow code calls library code, never the
+other way round. Library code should not depend on the workflow code of its
+package (Subsection~\ref{sec:modules}), so that users can reuse the building
+blocks in their own workflows without being forced into the package's own.
+
+The scientific logic of a package should be library code, where it can be
+tested, reused, and scaled without running the whole workflow. Workflow code
+may contain a piece of science while that piece is short, used in only one
+place, and tested by running the workflow code on a small input
+(Subsection~\ref{sec:end-to-end}). The piece should move into library code
+once a second step or code outside the workflow needs it
+(Subsection~\ref{sec:dry}), once it needs tests of its own, or once it grows
+beyond what a reader can check at a glance. Wherever the science lives, the
+rules about the science apply to it.
+
+Workflow code owns its program, and with it the program's output, files, and
+process. Rules that restrict library code, such as those on printing, files,
+and global state, therefore do not apply to it.
+
+The principles are grouped accordingly. Part~\ref{part:general} applies to
+all code; where a principle works differently for the two kinds of code, it
+says how. Part~\ref{part:workflow} adds the principles that apply only to
+workflow code, and Part~\ref{part:library} those that apply only to library
+code.
+
+
+
 \subsection*{Terminology}
 \phantomsection
 \addcontentsline{toc}{subsection}{Terminology}
 \label{sec:terminology}
 
 \begin{description}
-  \item[Package] The software these guidelines apply to, whatever its form: a
-    library, a command-line tool, or a workflow.
-  \item[Library code] The part of a package that other code calls: the
-    scientific logic and everything it needs. Most rules in these guidelines
-    are about library code.
-  \item[Application layer] The part of a tool or workflow that owns the
-    program: command-line entry points, workflow definitions, and job
-    scripts. Rules that restrict library code, such as those on printing,
-    files, and global state, do not apply to it; instead, it has to stay
-    thin (Subsection~\ref{sec:library}).
+  \item[Package] The unit of distribution: the software as a whole, as it is
+    installed, versioned, and shared. A package may contain library code,
+    workflow code, or both; it is not a synonym for a library.
+  \item[Library code] The code in a package that other code calls.
+  \item[Workflow code] The code in a package that owns the program and calls
+    other code: workflow definitions, the scripts of their steps, and the
+    main functions of command-line tools.
   \item[Host stack] The software ecosystem the user already works in: the
     programming language, its standard array and data-frame types, its
     established numerical, statistical, and plotting libraries, and the
@@ -159,12 +302,22 @@ Subsection~\ref{sec:quality} decide.
     R with its package repositories, and Julia with its package ecosystem.
     The host stack sets the conventions for data types, randomness,
     warnings, logging, and packaging that the package follows.
+  \item[Entry point] Anything a caller invokes to hand inputs to the package
+    and get a result: a user-facing function, a command of a command-line
+    tool, a workflow, or a step of a workflow.
   \item[User-facing function] Any function, class, or method that is
     documented for users, including low-level primitives. Together, the
     user-facing functions form the public API; everything else is internal.
-  \item[Caller] The code that calls a user-facing function, and by extension
-    the user who wrote it.
+  \item[Caller] The code that calls an entry point, and by extension the user
+    who wrote or runs it.
 \end{description}
+
+
+
+% ==========================================================
+\part{All code}
+\label{part:general}
+% ==========================================================
 
 
 
@@ -268,9 +421,10 @@ method may return a result that did not converge
 (Subsection~\ref{sec:convergence}), provided the degradation is explicit: it
 is documented or chosen by the caller, the result records what is missing or
 uncertain, and the failure is reported through the channels of
-Subsection~\ref{sec:output}. A tool or workflow that did not complete what was
-asked must also say so in its exit status. What must never happen is a
-degraded result that cannot be told apart from a valid one.
+Subsection~\ref{sec:output}. Workflow code that did not complete what was
+asked must also say so in its exit status (Subsection~\ref{sec:all-or-nothing}).
+What must never happen is a degraded result that cannot be told apart from a
+valid one.
 
 Many rules in these guidelines apply this principle to a particular situation.
 Where none of them covers a case, the default is the same: when in doubt,
@@ -281,23 +435,19 @@ fail.
 \subsection{Pay as you grow}
 \label{sec:role}
 
-Engineering effort has to pay for itself. Not all software in scope deserves
-the same investment: a tool that three colleagues run on small datasets needs
-less than a workflow that processes every sample of a core facility, or a
-library whose results enter publications and regulatory decisions. Scale the
-effort with the role of the software, judged by how many people use it, how
-often and for how long, on how much data, and what a wrong result would cost.
+Engineering effort has to pay for itself, and not all research software
+deserves the same investment. Invest what the rung of the software on the
+\hyperref[sec:ladder]{Ladder of Research Software} demands. Building for a
+higher rung takes effort away from the science; building for a lower one is
+paid for in wrong results.
 
-The requirements marked \emph{must} are the floor for all software in scope;
-most of them cost little and prevent wrong results. What scales with the role
-is everything above that floor: how thoroughly the \emph{should}s are
-followed, the depth of testing and documentation, the effort put into
-performance, and the length of the stability commitment.
+Software usually climbs without anyone deciding it, and the first step is the
+one most often missed: the script that a colleague asks for is already on the
+second rung. Reassess the role whenever the users, the data, or the stakes
+change, and climb before new users rely on the software, not after the first
+wrong result. Not every script needs to climb, and one that stays on the
+first rung is not a failure.
 
-Roles change, and software usually grows into a larger role without anyone
-deciding it. Reassess the role whenever the users, the data, or the stakes
-change, and raise the effort before new users rely on the software, not after
-the first wrong result.
 
 
 \subsection{KISS: Keep it simple, stupid}
@@ -330,7 +480,7 @@ Custom code belongs only in the distinctive scientific problem that justifies
 the package. That problem is the core domain. Linear algebra, optimization,
 numerical integration, automatic differentiation, parallel execution, file
 input and output, and plotting are generic capabilities: reuse mature
-libraries from the host stack instead of rebuilding them.
+libraries and tools from the host stack instead of rebuilding them.
 
 A package must document, test, and maintain everything it owns. Owning generic
 work therefore takes effort away from the scientific contribution, and a
@@ -374,74 +524,6 @@ belongs in the repository, not in people's heads.
 
 
 
-\subsection{Don't call us, we'll call you}
-\label{sec:library}
-
-A framework follows the Hollywood principle: it owns the program and calls
-user code at fixed hooks. A library does the opposite: the user owns the
-program and calls the library. The scientific logic of a package should be
-library code.
-
-Library code should not take over the main program, the solver or
-simulation loop, the data model, or the analysis workflow. Provide
-composable primitives that users call from their own scripts, notebooks,
-pipelines, and host-stack tools. The package should not become a framework
-on top of the host stack.
-
-Where the method needs user code, such as an objective function, a model, or
-the right-hand side of a differential equation, accept it as an ordinary
-function argument. Requiring users to subclass package classes or to
-register code with a package-managed lifecycle turns the library into a
-framework.
-
-A package that is itself a tool or a workflow does own its program, through
-its application layer (Subsection~\ref{sec:terminology}). Keep that layer
-thin: it orchestrates, handles files and configuration, and calls the
-library code, but contains no scientific logic. The science can then be
-tested, reused, and scaled without running the whole workflow.
-
-
-
-\subsection{Operate on data objects, not files}
-\label{sec:no-files}
-
-Library code should take data objects and return data objects; reading and
-writing files belongs to the caller or to the application layer
-(Subsection~\ref{sec:terminology}). This avoids assumptions about file
-formats, directory layouts, and environments, and it prevents hidden side
-effects.
-
-Accept the data types of the host stack, including lazy, memory-mapped, and
-chunked representations where the method permits it. Operating on data
-objects does not mean loading everything into memory; materializing such data
-behind the user's back is a surprise cost (Subsection~\ref{sec:cost}).
-
-Keeping input and output out of library code creates an obligation: the
-package's own objects, such as fitted models or result containers, should be
-storable with the host stack's standard serialization mechanisms, or
-convertible to standard types that are. If reading a domain-specific file
-format is itself part of the core domain, isolate it in a separate module
-that returns standard data objects.
-
-
-
-\subsection{Avoid plotting in core functionality}
-\label{sec:plotting}
-
-Plotting is brittle, backend-dependent, and parameter-heavy, so core
-functionality should not plot. If the package provides plotting, strictly
-separate computation from visualization: functions that compute return
-results, and separate functions plot them.
-
-Plotting functions should take computed results as input and never recompute
-them. Where the plotting library supports it, they should draw into a target
-the caller can pass in, return the plot object instead of displaying it, and
-leave global plotting styles untouched (Subsection~\ref{sec:global-state}).
-The plotting library should be an optional dependency
-(Subsection~\ref{sec:sustainability}).
-
-
-
 % ==========================================================
 \section{Code structure and abstraction}
 % ==========================================================
@@ -472,33 +554,16 @@ use.
 
 
 
-\subsection{Design modules around clear responsibilities}
-\label{sec:modules}
-
-Organize code into modules with clear, coherent responsibilities. Each module
-should own one part of the package, such as validation, computation,
-preprocessing, or visualization, and its name should say which. Avoid
-miscellaneous helper modules such as \texttt{utils} when a more specific name
-would describe the purpose of the code; a module that cannot be named
-precisely usually has no single responsibility.
-
-Dependencies between modules should point in one direction, from the specific
-to the fundamental. Computation must not depend on visualization, and core
-computation should not depend on input and output. Knowledge shared by several
-modules, such as validation checks and numerical defaults, belongs in one
-module that the others import (Subsection~\ref{sec:dry}).
-
-
-
 \subsection{No code at large}
 \label{sec:functions}
 
-Library code lives in functions and classes. At module level, only imports,
-named constants (Subsection~\ref{sec:magic-numbers}), and definitions belong.
-A statement that does work there runs on every import
+Code lives in functions and classes. At module level, only imports, named
+constants (Subsection~\ref{sec:magic-numbers}), and definitions belong. A
+statement that does work there runs on every import
 (Subsection~\ref{sec:import}), cannot be tested in isolation, and tends to
-communicate through global variables. The application layer follows the same
-rule: its logic goes into a main function, and the entry point only calls it.
+communicate through global variables. A script follows the same rule: its
+logic goes into a main function, and the top level of the script only calls
+it.
 
 Prefer functions. Most scientific operations take data and parameters and
 return a result, which a function expresses directly and which is easy to test
@@ -523,10 +588,12 @@ When the same knowledge lives in several places, every change has to find
 and update all copies consistently. Copies that drift apart produce
 software that contradicts itself. Typical examples in scientific code
 are a tolerance hard-coded in several functions, the same input check
-reimplemented in each user-facing function, or a default value repeated in
-the function signature, its documentation, and the examples. Define such
-knowledge once and refer to it everywhere else. Where documentation has to
-state a value, generate it from the single definition if the tooling permits.
+reimplemented in each user-facing function, a default value repeated in the
+function signature, its documentation, and the examples, or a threshold set
+both in the configuration of a workflow and in the script of one of its
+steps. Define such knowledge once and refer to it everywhere else. Where
+documentation has to state a value, generate it from the single definition
+if the tooling permits.
 
 DRY concerns knowledge, not text. Code that looks different can still
 duplicate the same rule. Conversely, code that looks alike may encode
@@ -583,7 +650,9 @@ new abstraction only once the genuinely shared rule has become visible.
 Write the code the user would write before writing the code that makes it work.
 The calling code is the part that must be good, because it is the part users
 see, learn, and depend on. Everything behind the interface can be rewritten
-later; the interface itself cannot.
+later; the interface itself cannot. For workflow code, the calling code is the
+command, the configuration, and the table of samples or inputs that users
+write.
 
 Designing outward from the implementation produces signatures that expose
 internal structure rather than user intent. Designing inward from the call site
@@ -600,56 +669,6 @@ effort tends to entrench whatever interface it was built to serve.
 
 
 
-\subsection{Make the common case easy, and the uncommon case possible}
-\label{sec:layers}
-
-A useful design principle for scientific software is to provide the API in
-\emph{layers of abstraction}. Each layer exposes the same underlying
-capabilities but with different trade-offs between convenience and control.
-
-Higher layers provide functions that solve common tasks with minimal user
-effort. These functions often make reasonable assumptions, provide sensible
-defaults, and combine multiple lower-level operations into a single call.
-They are designed for the typical use case.
-
-Lower layers expose smaller, more specialized primitives. These functions
-require more explicit code from the user but provide greater flexibility,
-composability, and control over the computational workflow.
-
-Each layer should be built from the public primitives of the layer below, so
-that the convenient functions are compositions of the controllable ones rather
-than a second implementation of the same knowledge (Subsection~\ref{sec:dry}).
-
-The relationship between abstraction layers, control, and convenience is
-illustrated in Figure~\ref{fig:layered_api}. As abstraction layers increase,
-convenience typically increases while direct control decreases.
-
-\begin{figure}[h]
-\centering
-\begin{tikzpicture}[x=1cm,y=1cm]
-
-\def\W{10}
-\def\H{0.8}
-
-\draw[->] (0,2.2) -- (\W,2.2);
-\node[above] at (\W/2,2.2) {Layers};
-
-\node[left] at (0,1.4) {Control};
-\draw (0,1) rectangle (\W,1+\H);
-\fill[black] (0,1) -- (0,1+\H) -- (\W,1) -- cycle;
-
-\node[left] at (0,0.2) {Convenience};
-\draw (0,-0.2) rectangle (\W,-0.2+\H);
-\fill[black] (0,-0.2) -- (\W,-0.2+\H) -- (\W,-0.2) -- cycle;
-
-\end{tikzpicture}
-\caption{Layered API design. With increasing abstraction layers, direct
-control decreases while convenience increases.}
-\label{fig:layered_api}
-\end{figure}
-
-
-
 \subsection{Name axes, units, and conventions}
 \label{sec:conventions}
 
@@ -657,8 +676,8 @@ Axis order, such as observations-by-variables versus
 variables-by-observations or time-major versus space-major, the index base,
 coordinate systems and reference frames, angle conventions, and physical units
 are part of the meaning of every array. If they are not in the signature, the
-documentation, or the returned object, users will infer them wrongly. The
-package must not infer them from the data either
+documentation, the returned object, or the file that holds the data, users
+will infer them wrongly. The package must not infer them from the data either
 (Subsection~\ref{sec:no-guess}).
 
 Do not rely on a comment or an example notebook to carry a convention. Name
@@ -675,7 +694,9 @@ data through every operation.
 Changing a default normalization, initialization, regularization strength,
 convergence tolerance, iteration limit, $\varepsilon$, reduction, or
 tie-breaking rule can change published numbers. Such changes must be treated
-as breaking changes of the API, not as internal tweaks.
+as breaking changes of the API, not as internal tweaks. This holds for the
+defaults of functions, of command-line options, and of workflow
+configurations alike.
 
 Signatures are not the whole contract. Documented numerical defaults are part
 of the scientific behavior of the package. If a default has to change, follow
@@ -689,7 +710,10 @@ the process for breaking changes in Subsection~\ref{sec:stable-api}.
 API stability builds user trust, and in science it protects published
 results. Avoid breaking changes that are not necessary. Keep the public API
 small, since everything public is a commitment, and mark internal code as
-private using the host stack's convention.
+private using the host stack's convention. The public API of workflow code is
+what its users write and read: its command-line options, the keys and
+defaults of its configuration, the formats of its inputs, and the names and
+layout of its outputs.
 
 Number releases so that the version communicates compatibility, for example
 with semantic versioning, and record every change of behavior in a changelog.
@@ -711,12 +735,14 @@ Documentation should describe what a function computes and how to use it, not
 how the code is organized internally. Clear interfaces allow the
 implementation to change without breaking user code.
 
-In scientific software, however, the method is part of the behavior. The
-documentation of a user-facing function should state the algorithm or
-estimator, the approximations and assumptions it makes, its numerical
-defaults, its policy for missing values (Subsection~\ref{sec:missing}), and
-references to the literature that defines the method. Users need this
-knowledge to interpret and report their results.
+In research software, however, the method is part of the behavior. The
+documentation of a user-facing function, a command, or a workflow should
+state the algorithm or estimator, the approximations and assumptions it
+makes, its numerical defaults, its policy for missing values
+(Subsection~\ref{sec:missing}), and references to the literature that
+defines the method; for a workflow, it also names the method and the tool
+that each step uses. Users need this knowledge to interpret and report their
+results.
 
 Implementation details, such as loop structure, internal data structures, and
 private helper functions, do not belong in user documentation. The dividing
@@ -727,22 +753,23 @@ implementation.
 
 
 % ==========================================================
-\section{Explicit behavior and no side effects}
+\section{Explicit behavior}
 % ==========================================================
 
 \subsection{Do what it says on the tin}
 \label{sec:explicit}
 
-A function should do what its name and arguments say, and nothing more.
-Processing steps that change the data, such as filtering, normalization,
-sorting, deduplication, or outlier removal, must not be hidden inside a
-function named for a different operation: a user who calls a fitting
-function should not discover later that the data were also filtered. Expose
-such steps as named arguments, or provide them as separate functions the
-user calls. Steps that are part of the definition of the method are
-documented as such (Subsection~\ref{sec:document-method}).
+An entry point should do what its name and arguments say, and nothing more.
+Operations that change the data, such as filtering, normalization, sorting,
+deduplication, or outlier removal, must not be hidden inside an entry point
+named for a different operation: a user who calls a fitting function should
+not discover later that the data were also filtered, and a workflow step
+named for alignment should not also discard reads. Expose such operations as
+named arguments or configuration options, or provide them as separate
+functions or steps. Operations that are part of the definition of the method
+are documented as such (Subsection~\ref{sec:document-method}).
 
-This is the counterpart of Subsection~\ref{sec:no-guess}: a function must
+This is the counterpart of Subsection~\ref{sec:no-guess}: an entry point must
 neither read more into a call than it states nor do more than it asks.
 
 
@@ -762,110 +789,36 @@ of a call depend on the data, so the same code can do different things for
 different datasets. When the guess is wrong, the result is wrong without
 looking wrong (Subsection~\ref{sec:loud}).
 
-Make the user state the choice through an argument, or raise an error that
-lists the possible interpretations. Where automatic selection is genuinely
-useful, offer it as an explicit option, such as a \texttt{method} argument
-with the value \texttt{auto}, and record the choice in the returned result.
+Make the user state the choice through an argument or a configuration
+option, or raise an error that lists the possible interpretations. Where
+automatic selection is genuinely useful, offer it as an explicit option, such
+as a \texttt{method} argument with the value \texttt{auto}, and record the
+choice with the result.
 Heuristics may trigger warnings (Subsection~\ref{sec:output}), but must not
 change behavior: announcing a guess does not make it the user's choice.
+
 
 
 \subsection{Do not mutate caller data}
 \label{sec:mutation}
 
-A function must not overwrite, transpose, densify, drop missing values from,
-or otherwise rewrite objects the caller still holds, unless the user opted
+An entry point must not overwrite, transpose, densify, drop missing values
+from, or otherwise rewrite data the caller still holds, unless the user opted
 into an explicit in-place operation, such as a clearly named in-place function
-or argument. Silent mutation makes it impossible to know which object still
-holds the original data.
+or argument. Silent mutation makes it impossible to know which object or file
+still holds the original data.
 
-If a transformation is required, return a new object. The default is: leave
-caller data untouched.
-
-
-
-\subsection{Do not touch global state}
-\label{sec:global-state}
-
-Library code must not change process-wide settings. It must not set or reseed
-the global random number generator, select hardware devices, change the number
-of threads used by numerical libraries, change floating-point error handling,
-change display options of data libraries, or rewrite plotting defaults. These
-settings belong to the user. A package that calls \texttt{set.seed} in R or
-\texttt{numpy.random.seed} in Python inside a function silently takes control
-of the user's session.
-
-A change that is strictly scoped to the package's own computation, and
-restored before control returns to the caller, including when an error
-occurs, may be made where the host stack provides a mechanism for it. How
-the caller controls randomness instead is defined in
-Subsection~\ref{sec:reproducibility}.
-
-
-
-\subsection{The library follows the caller's data types}
-\label{sec:follow-types}
-
-If the caller passes data of a particular type, precision, or placement, keep
-it. Library code must not silently densify sparse data, upcast single to
-double precision, move data between the main processor and an accelerator, or
-convert one array type of the host stack into another. The output should have
-the same kind of type, precision, and placement as the input. Inputs that
-carry no such choice, such as a plain list of numbers, may be converted to the
-package's working type.
-
-The caller's choices reflect deliberate trade-offs of memory, speed,
-precision, and hardware. Following the incoming data preserves them; choosing
-for the user breaks the workflows built on them.
-
-Correctness outranks this rule (Subsection~\ref{sec:quality}). If the method
-cannot produce a correct result in the incoming precision, raise an error that
-names the required precision, rather than silently upcasting or silently
-returning a degraded result (Subsection~\ref{sec:loud}); a user who wants the
-conversion can make it explicitly. Using higher precision for small
-intermediate quantities, such as an accumulator, is part of the method and
-must be documented as such (Subsection~\ref{sec:document-method}); converting
-the caller's data is not.
-If the package cannot operate on a given type at all, it should say so with an
-error rather than convert the data at hidden cost.
-
-
-
-\subsection{No surprise cost}
-\label{sec:cost}
-
-Time, memory, and network use are part of the contract. A helper must not, as
-a side effect, densify sparse data, materialize lazy data, download data, or
-transfer a whole array to or from an accelerator.
-
-Expensive steps should be explicit in the function the user calls, or
-impossible to invoke by accident. A convenience wrapper that silently
-materializes the full dataset is a bug, not a feature. Input validation has
-costs as well; how they are balanced against correctness is defined in
-Subsection~\ref{sec:validation-cost}.
-
-
-
-\subsection{Importing the package has no side effects}
-\label{sec:import}
-
-Importing or loading the package must not download data, compile extensions,
-print, select backends, configure logging, or read from or write to the
-user's home directory. Users load libraries inside other tools, test suites,
-and notebooks; work done at load time is hidden work, and it slows down and
-destabilizes everything that depends on the package.
-
-Put optional heavy setup behind an explicit function the caller invokes.
-Loading the package should be cheap and silent.
+If a transformation is required, library code returns a new object, and
+workflow code writes a new file; a step must not modify, overwrite, or delete
+its input files. The default is: leave caller data untouched.
 
 
 
 \subsection{Raise, warn, or stay silent}
 \label{sec:output}
 
-Library code must not print. Standard output belongs to the user's scripts,
-notebooks, and batch jobs. The package communicates through three channels,
-and each situation calls for exactly one of them:
+Code communicates with its caller through three channels, and each situation
+calls for exactly one of them:
 
 \begin{itemize}
   \item \textbf{Raise} when the call is invalid, or when continuing would
@@ -875,9 +828,7 @@ and each situation calls for exactly one of them:
     user intended, for example when a heuristic suggests that the data are
     not what the call assumes (Subsection~\ref{sec:no-guess}), or when the
     behavior of the call will change in a future version. Deprecations
-    (Subsection~\ref{sec:stable-api}) belong here. Use the host stack's
-    standard warning mechanism, so that users can filter warnings or turn
-    them into errors.
+    (Subsection~\ref{sec:stable-api}) belong here.
   \item \textbf{Stay silent} when the call is valid and unremarkable.
 \end{itemize}
 
@@ -886,10 +837,19 @@ result, raise (Subsection~\ref{sec:loud}). Warnings should name the argument
 or condition that triggered them and say how to avoid them by changing the
 call. Avoid emitting the same warning repeatedly, for example inside a loop.
 
-Progress reports and diagnostic messages fall outside these three channels.
-They should be opt-in, through an explicit argument or the host stack's
-standard logging or messaging facility, so that the user decides whether and
-where they appear.
+\textbf{Library code} raises and warns through the host stack's standard
+mechanisms for errors and warnings, so that users can catch errors, filter
+warnings, or turn them into errors. It must not print: standard output
+belongs to the user's scripts, notebooks, and batch jobs. Progress reports
+and diagnostic messages fall outside the three channels. They should be
+opt-in, through an explicit argument or the host stack's standard logging or
+messaging facility, so that the user decides whether and where they appear.
+
+\textbf{Workflow code} raises by stopping with an error exit status and a
+message on the standard error stream (Subsection~\ref{sec:all-or-nothing}),
+and warns on the standard error stream or in its log. Messages must not go
+to standard output where it carries data, because they would end up in the
+data.
 
 
 
@@ -900,12 +860,14 @@ where they appear.
 \subsection{Garbage in, useful error out}
 \label{sec:validation}
 
-User-facing functions must validate their inputs at the point of entry:
-types, shapes, bounds, units where they are declared, and the semantic
-constraints of the method. Invalid inputs, unsupported combinations of
-arguments, and dangerous settings must produce an error at the boundary, not
-a numerical failure or a wrong result further downstream. Fail loudly and
-early (Subsection~\ref{sec:loud}).
+User-facing functions, commands, and workflows must validate their inputs at
+the point of entry: types, shapes, bounds, units where they are declared, and
+the semantic constraints of the method. Invalid inputs, unsupported
+combinations of arguments, and dangerous settings must produce an error at
+the boundary, not a numerical failure or a wrong result further downstream.
+Fail loudly and early (Subsection~\ref{sec:loud}). A workflow should check
+its configuration and its table of inputs before its first step runs, so
+that a typo fails within seconds, not after hours of computation.
 
 Error messages should be specific enough that users can recover without
 searching through the full documentation: name the argument, state what was
@@ -924,47 +886,18 @@ a validated entry point should not repeat the checks.
 
 
 
-\subsection{Keep validation proportionate}
-\label{sec:validation-cost}
-
-Validation has a cost, so the requirements for correctness and for cost
-(Subsection~\ref{sec:cost}) can pull in different directions. Distinguish two
-kinds of check:
-
-\begin{description}
-  \item[Metadata checks] inspect only types, shapes, precision, declared
-    units, and combinations of arguments. They are cheap and must always run
-    in user-facing functions.
-  \item[Data checks] inspect the values themselves, for example for missing
-    values, bounds, symmetry, or sortedness. They cost at least one pass over
-    the data, and for data on an accelerator they can force the program to
-    wait for the device.
-\end{description}
-
-Correctness outranks performance (Subsection~\ref{sec:quality}), so data
-checks should run by default in user-facing functions, and their cost should
-be documented. A user who has already validated the data may turn them off
-through an explicit, clearly named argument. This follows the layered design
-of Subsection~\ref{sec:layers}: the common case is safe, and the uncommon case
-is possible.
-
-Data checks must not themselves create a surprise cost
-(Subsection~\ref{sec:cost}). For lazy or chunked data, express a check as part
-of the same deferred computation, or apply it chunk by chunk.
-
-
-
 \subsection{Missing values and NaN are explicit}
 \label{sec:missing}
 
-Each user-facing function must have a documented policy for missing values,
-such as NaN, NA, or masked entries: reject, propagate, or mask. Silent
-imputation, dropping, or filling is a scientific bug, not a convenience
+Each entry point must have a documented policy for missing values, such as
+NaN, NA, or masked entries: reject, propagate, or mask. Silent imputation,
+dropping, or filling is a scientific bug, not a convenience
 (Subsection~\ref{sec:loud}): it replaces a missing measurement with a guess
 (Subsection~\ref{sec:no-guess}).
 
-If the input violates the policy, the function must raise an error that names
-the missing values, rather than fail later with an unrelated numerical error.
+If the input violates the policy, the entry point must raise an error that
+names the missing values, rather than fail later with an unrelated numerical
+error.
 Checking for missing values is a data check in the sense of
 Subsection~\ref{sec:validation-cost}.
 
@@ -975,7 +908,7 @@ Subsection~\ref{sec:validation-cost}.
 
 Tests check the package on the inputs someone thought of, but real data reach
 paths that no test exercised. A bug that produces a silently wrong result is
-the worst failure scientific software can have, so the key invariants of a
+the worst failure research software can have, so the key invariants of a
 method should also be checked in the code itself, on every run. Such
 assertions complement the tests; they do not replace them.
 
@@ -1055,8 +988,9 @@ the number of iterations and the final residual.
 \label{sec:testing}
 
 Scientific code is particularly prone to subtle errors that produce plausible
-but wrong numbers. Every user-facing function must have tests, and every
-release must pass the full test suite.
+but wrong numbers. Every entry point must have tests, and every release must
+pass the full test suite. The steps of a workflow are tested by running the
+whole workflow on a small dataset (Subsection~\ref{sec:end-to-end}).
 
 Tests should cover error paths as well as results: invalid inputs must be
 shown to raise the documented errors (Subsection~\ref{sec:validation}). Every
@@ -1087,13 +1021,14 @@ the scientific claims the software makes and test those claims directly.
 \label{sec:size-matters}
 
 A method that works on test data but fails at the scale of real applications
-solves no problem. Document the time and memory complexity of each
-user-facing function in terms of the data size, and benchmark at the sizes of
+solves no problem. Document the time and memory complexity of each entry
+point in terms of the data size, and benchmark at the sizes of
 the driving applications (Subsection~\ref{sec:applications}), not only on toy
 inputs. Profile before optimizing, since bottlenecks are rarely where
 intuition expects them, and track benchmarks to catch performance
 regressions. Performance never outranks correctness or clarity
 (Subsection~\ref{sec:quality}).
+
 
 
 \subsection{Reproducibility: the same answer under stated conditions}
@@ -1112,6 +1047,9 @@ generator or seed argument that controls all randomness within that call.
 Where the host stack's convention is a single global generator, draw from the
 generator the caller controls, subject to Subsection~\ref{sec:global-state}.
 The behavior when no generator or seed is supplied must be documented.
+Workflow code takes the seed from its configuration, passes it to every step
+that uses random numbers, and records it with the results
+(Subsection~\ref{sec:traceability}).
 
 Prefer deterministic algorithms. Where nondeterminism is unavoidable, for
 example because parallel reductions sum in varying order, document it and
@@ -1162,7 +1100,8 @@ report, or a decision.
 
 The package must expose its version at run time through the host stack's
 standard mechanism, such as \texttt{\_\_version\_\_} in Python or
-\texttt{packageVersion} in R. Every release should be tagged in version
+\texttt{packageVersion} in R, and a command-line tool through a
+\texttt{-{}-version} option. Every release should be tagged in version
 control and archived so that the exact version can be retrieved later: in a
 public archive with a persistent identifier, such as a DOI, for published
 software, or in the organization's release archive for internal software.
@@ -1172,8 +1111,382 @@ and the method.
 
 Results should record the package version and the parameters that produced
 them, including defaults that were not set explicitly: library code records
-them in the result objects it returns, and the application layer records
-them in the outputs and run metadata it writes. Changes of behavior between
+them in the result objects it returns, and workflow code records them in the
+outputs and run metadata it writes, together with the versions of the tools
+and libraries it ran (Subsection~\ref{sec:pin}). Changes of behavior between
 versions are traced through the changelog (Subsection~\ref{sec:stable-api}).
+
+
+
+% ==========================================================
+\part{Workflow code}
+\label{part:workflow}
+% ==========================================================
+
+
+
+% ==========================================================
+\section{Steps and their files}
+% ==========================================================
+
+\subsection{Out of sight, out of date}
+\label{sec:declared-inputs}
+
+Every step must declare everything its outputs depend on: its input files,
+including reference data, its parameters, and the code and environment that
+run it. A workflow manager, such as Snakemake, Nextflow, or Make, decides
+which steps to rerun by checking what it knows about. An input it does not
+know about can change without triggering a rerun, and the old output stays
+in place, looking as valid as before.
+
+Such a result is stale, and nothing marks it as stale
+(Subsection~\ref{sec:loud}). A step that reads an annotation file from a
+hard-coded path keeps its counts from the old annotation after the file has
+been updated; a script that reads a threshold from an environment variable
+keeps results computed with the old threshold. Undeclared inputs are the
+workflow counterpart of hidden global state: the output depends on something
+the caller cannot see.
+
+Pass parameters through a mechanism the workflow manager tracks; where it
+tracks none, write them to a file that is declared as an input. A step must
+also not write files it does not declare as outputs, because a step that
+reads them may run before they exist or after they have changed. Where an
+input cannot be tracked, such as a database queried over the network, record
+its version or the date of the query with the results
+(Subsection~\ref{sec:traceability}).
+
+
+
+\subsection{Nothing lost in translation}
+\label{sec:hand-off}
+
+Steps hand data to each other through files, and each hand-off is a
+translation: one step turns data objects into bytes or text, and the next
+turns them back. The translation must not change the data. Values, their
+precision, missing values, units, axis and coordinate conventions, and
+identifiers must arrive in the next step as they left the previous one.
+
+Text formats lose information silently. A floating-point number written with
+too few digits loses precision. NaN, NA, an empty field, and the string
+\texttt{NA} may be read as one another or as something else, depending on
+the reader (Subsection~\ref{sec:missing}). Identifiers that look like
+numbers, such as station codes or sample barcodes, lose their leading zeros,
+and dates are read in the wrong format. Each of these becomes a plausible
+wrong result in a later step (Subsection~\ref{sec:loud}). Prefer formats that
+store types, missing values, and metadata, such as Parquet, HDF5, NetCDF, or
+Zarr, where the host stack supports them. Where a text format is needed,
+state the number of digits and the encoding of missing values when writing,
+and the type of every column when reading.
+
+A file passed between steps is an interface, like the signature of a
+function. Its column names, types, units, and encoding of missing values are
+knowledge that belongs in one place (Subsection~\ref{sec:dry}), such as a
+schema that both the writing and the reading step use, and the reading step
+should check the file against it (Subsection~\ref{sec:validation}).
+
+
+
+\subsection{All or nothing}
+\label{sec:all-or-nothing}
+
+A step must either complete and write all of its outputs, or fail with an
+error exit status and leave no output that looks complete. A truncated file,
+such as a table that ends after half of the samples, looks like a smaller
+valid result, and a workflow manager that finds it will consider the step
+done (Subsection~\ref{sec:loud}).
+
+Truncated outputs arise when a program crashes, is interrupted, or is killed
+for exceeding its memory or time limit while it writes. Write to a temporary
+file and give it its final name only after writing has succeeded, and let the
+workflow manager remove the outputs of failed steps where it offers to.
+
+Unreported failures arise in shell code. By default, a shell script continues
+after a command fails, and a pipeline reports only the exit status of its
+last command, so a step can fail halfway and still exit with success. Run
+shell code in a strict mode, such as \texttt{set -euo pipefail} in Bash, and
+check the exit status of every program that a step calls.
+
+
+
+% ==========================================================
+\section{Environments and tests}
+% ==========================================================
+
+\subsection{Pin what you run}
+\label{sec:pin}
+
+Workflow code should run every step in an environment whose versions are
+pinned exactly: the language, the libraries, and every external tool. Record
+them in a lock file, in an environment file with exact versions, or in a
+container image identified by its digest rather than by a tag that can move.
+
+The results of a workflow depend on the tools it calls as much as on its own
+code. A new release of a tool can change a default or fix a bug, and with it
+the numbers (Subsection~\ref{sec:numeric-defaults}). A workflow that installs
+whatever version is current can therefore give different results next month
+from the same inputs, the same configuration, and the same version of the
+workflow (Subsection~\ref{sec:reproducibility}).
+
+This is the opposite of library code, which is installed next to other
+packages in the user's environment and therefore declares the range of
+versions it works with. Workflow code owns its program, and with it its
+environment. Steps may run in separate environments, for example when two
+tools need incompatible versions of the same dependency. Update pinned
+versions deliberately, as a change of the workflow that is tested
+(Subsection~\ref{sec:end-to-end}) and listed in the changelog
+(Subsection~\ref{sec:stable-api}).
+
+
+
+\subsection{Test the whole workflow on a small dataset}
+\label{sec:end-to-end}
+
+Every workflow must have a test that runs it from start to finish on a small
+dataset, and the test should run automatically on every change
+(Subsection~\ref{sec:testing}). Tests of the library code do not show that
+the steps fit together: that each step finds the files the previous one
+wrote, in the format it expects, and that every option of the configuration
+reaches the step that uses it. Many defects of workflow code are of this
+kind, and a run on real data reveals them only after hours, if at all.
+
+The dataset should be small enough that the whole run takes minutes, and
+varied enough to exercise every step and every branch the configuration can
+select, including an input that fails or is skipped where the workflow
+allows that (Subsection~\ref{sec:loud}). Check the outputs, not only that the
+run finished: compare them with known results, for example for simulated
+input, and check invariants such as the number of samples or the total of
+the counts (Subsection~\ref{sec:invariants}).
+
+
+
+% ==========================================================
+\part{Library code}
+\label{part:library}
+% ==========================================================
+
+
+
+% ==========================================================
+\section{Structure}
+% ==========================================================
+
+\subsection{Design modules around clear responsibilities}
+\label{sec:modules}
+
+Organize code into modules with clear, coherent responsibilities. Each module
+should own one part of the package, such as validation, computation,
+preprocessing, or visualization, and its name should say which. Avoid
+miscellaneous helper modules such as \texttt{utils} when a more specific name
+would describe the purpose of the code; a module that cannot be named
+precisely usually has no single responsibility.
+
+Dependencies between modules should point in one direction, from the specific
+to the fundamental. Computation must not depend on visualization, and core
+computation should not depend on input and output. Knowledge shared by several
+modules, such as validation checks and numerical defaults, belongs in one
+module that the others import (Subsection~\ref{sec:dry}).
+
+
+
+\subsection{Avoid plotting in core functionality}
+\label{sec:plotting}
+
+Plotting is brittle, backend-dependent, and parameter-heavy, so core
+functionality should not plot. If the package provides plotting, strictly
+separate computation from visualization: functions that compute return
+results, and separate functions plot them.
+
+Plotting functions should take computed results as input and never recompute
+them. Where the plotting library supports it, they should draw into a target
+the caller can pass in, return the plot object instead of displaying it, and
+leave global plotting styles untouched (Subsection~\ref{sec:global-state}).
+The plotting library should be an optional dependency
+(Subsection~\ref{sec:sustainability}).
+
+
+
+% ==========================================================
+\section{Interfaces}
+% ==========================================================
+
+\subsection{Operate on data objects, not files}
+\label{sec:no-files}
+
+Library code should take data objects and return data objects; reading and
+writing files belongs to the caller or to workflow code. This avoids
+assumptions about file formats, directory layouts, and environments, and it
+prevents hidden side effects.
+
+Accept the data types of the host stack, including lazy, memory-mapped, and
+chunked representations where the method permits it. Operating on data
+objects does not mean loading everything into memory; materializing such data
+behind the user's back is a surprise cost (Subsection~\ref{sec:cost}).
+
+Keeping input and output out of library code creates an obligation: the
+package's own objects, such as fitted models or result containers, should be
+storable with the host stack's standard serialization mechanisms, or
+convertible to standard types that are. If reading a domain-specific file
+format is itself part of the core domain, isolate it in a separate module
+that returns standard data objects.
+
+
+
+\subsection{Make the common case easy, and the uncommon case possible}
+\label{sec:layers}
+
+A useful design principle for research software is to provide the API in
+\emph{layers of abstraction}. Each layer exposes the same underlying
+capabilities but with different trade-offs between convenience and control.
+
+Higher layers provide functions that solve common tasks with minimal user
+effort. These functions often make reasonable assumptions, provide sensible
+defaults, and combine multiple lower-level operations into a single call.
+They are designed for the typical use case.
+
+Lower layers expose smaller, more specialized primitives. These functions
+require more explicit code from the user but provide greater flexibility,
+composability, and control over the computational workflow.
+
+Each layer should be built from the public primitives of the layer below, so
+that the convenient functions are compositions of the controllable ones rather
+than a second implementation of the same knowledge (Subsection~\ref{sec:dry}).
+
+The relationship between abstraction layers, control, and convenience is
+illustrated in Figure~\ref{fig:layered_api}. As abstraction layers increase,
+convenience typically increases while direct control decreases.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+
+\def\W{10}
+\def\H{0.8}
+
+\draw[->] (0,2.2) -- (\W,2.2);
+\node[above] at (\W/2,2.2) {Layers};
+
+\node[left] at (0,1.4) {Control};
+\draw (0,1) rectangle (\W,1+\H);
+\fill[black] (0,1) -- (0,1+\H) -- (\W,1) -- cycle;
+
+\node[left] at (0,0.2) {Convenience};
+\draw (0,-0.2) rectangle (\W,-0.2+\H);
+\fill[black] (0,-0.2) -- (\W,-0.2+\H) -- (\W,-0.2) -- cycle;
+
+\end{tikzpicture}
+\caption{Layered API design. With increasing abstraction layers, direct
+control decreases while convenience increases.}
+\label{fig:layered_api}
+\end{figure}
+
+
+
+\subsection{The library follows the caller's data types}
+\label{sec:follow-types}
+
+If the caller passes data of a particular type, precision, or placement, keep
+it. Library code must not silently densify sparse data, upcast single to
+double precision, move data between the main processor and an accelerator, or
+convert one array type of the host stack into another. The output should have
+the same kind of type, precision, and placement as the input. Inputs that
+carry no such choice, such as a plain list of numbers, may be converted to the
+package's working type.
+
+The caller's choices reflect deliberate trade-offs of memory, speed,
+precision, and hardware. Following the incoming data preserves them; choosing
+for the user breaks the workflows built on them.
+
+Correctness outranks this rule (Subsection~\ref{sec:quality}). If the method
+cannot produce a correct result in the incoming precision, raise an error that
+names the required precision, rather than silently upcasting or silently
+returning a degraded result (Subsection~\ref{sec:loud}); a user who wants the
+conversion can make it explicitly. Using higher precision for small
+intermediate quantities, such as an accumulator, is part of the method and
+must be documented as such (Subsection~\ref{sec:document-method}); converting
+the caller's data is not.
+If the package cannot operate on a given type at all, it should say so with an
+error rather than convert the data at hidden cost.
+
+
+
+\subsection{Keep validation proportionate}
+\label{sec:validation-cost}
+
+Validation has a cost, so the requirements for correctness and for cost
+(Subsection~\ref{sec:cost}) can pull in different directions. Distinguish two
+kinds of check:
+
+\begin{description}
+  \item[Metadata checks] inspect only types, shapes, precision, declared
+    units, and combinations of arguments. They are cheap and must always run
+    in user-facing functions.
+  \item[Data checks] inspect the values themselves, for example for missing
+    values, bounds, symmetry, or sortedness. They cost at least one pass over
+    the data, and for data on an accelerator they can force the program to
+    wait for the device.
+\end{description}
+
+Correctness outranks performance (Subsection~\ref{sec:quality}), so data
+checks should run by default in user-facing functions, and their cost should
+be documented. A user who has already validated the data may turn them off
+through an explicit, clearly named argument. This follows the layered design
+of Subsection~\ref{sec:layers}: the common case is safe, and the uncommon case
+is possible.
+
+Data checks must not themselves create a surprise cost
+(Subsection~\ref{sec:cost}). For lazy or chunked data, express a check as part
+of the same deferred computation, or apply it chunk by chunk.
+
+
+
+% ==========================================================
+\section{No side effects}
+% ==========================================================
+
+\subsection{Do not touch global state}
+\label{sec:global-state}
+
+Library code must not change process-wide settings. It must not set or reseed
+the global random number generator, select hardware devices, change the number
+of threads used by numerical libraries, change floating-point error handling,
+change display options of data libraries, or rewrite plotting defaults. These
+settings belong to the user. A package that calls \texttt{set.seed} in R or
+\texttt{numpy.random.seed} in Python inside a function silently takes control
+of the user's session.
+
+A change that is strictly scoped to the package's own computation, and
+restored before control returns to the caller, including when an error
+occurs, may be made where the host stack provides a mechanism for it. How
+the caller controls randomness instead is defined in
+Subsection~\ref{sec:reproducibility}.
+
+
+
+\subsection{No surprise cost}
+\label{sec:cost}
+
+Time, memory, and network use are part of the contract. A helper must not, as
+a side effect, densify sparse data, materialize lazy data, download data, or
+transfer a whole array to or from an accelerator.
+
+Expensive steps should be explicit in the function the user calls, or
+impossible to invoke by accident. A convenience wrapper that silently
+materializes the full dataset is a bug, not a feature. Input validation has
+costs as well; how they are balanced against correctness is defined in
+Subsection~\ref{sec:validation-cost}.
+
+
+
+\subsection{Importing the package has no side effects}
+\label{sec:import}
+
+Importing or loading the package must not download data, compile extensions,
+print, select backends, configure logging, or read from or write to the
+user's home directory. Users load libraries inside other tools, test suites,
+and notebooks; work done at load time is hidden work, and it slows down and
+destabilizes everything that depends on the package.
+
+Put optional heavy setup behind an explicit function the caller invokes.
+Loading the package should be cheap and silent.
 
 \end{document}

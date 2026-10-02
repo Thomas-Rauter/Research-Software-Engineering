@@ -5,16 +5,17 @@
 A collection of LaTeX documents, each built into a PDF and published on the
 repository's GitHub Pages website.
 
-The main document is *Design Principles for Scientific Software*: guidelines
-for turning science into software that several people use over and over
-(libraries, command-line tools, and workflows), whether it is published or
-kept within an organization. One-off analysis scripts are out of scope. The
-guidelines are independent of programming language and scientific field.
+The main document is *Design Principles for Research Software*: guidelines
+for research software in the broadest sense, in academia and in industry,
+from the one-off script of a PhD student to libraries and workflows that a
+community or a company relies on. Such software stands on the "Ladder of
+Research Software", and the principles are what it takes to climb it. The guidelines are independent of programming language and
+scientific field.
 
 Most of the principles are general software engineering principles (KISS,
 DRY, stable APIs, no side effects, testing), stated and motivated for the
 scientific setting. There, the typical failure is not a crash but a
-plausible, wrong number. A smaller set is specific to scientific software:
+plausible, wrong number. A smaller set is specific to research software:
 numerical stability, conditioning and convergence, units and axis
 conventions, missing values, numerical defaults as part of the API,
 reproducibility, and traceability of results.
@@ -27,7 +28,7 @@ consistency, and tightening the prose.
 
 - `latex/NAME.tex` is the source of a document and the source of truth. All
   edits go here, for example to
-  `latex/Design_Principles_for_Scientific_Software.tex`.
+  `latex/Design_Principles_for_Research_Software.tex`.
 - `pdf/NAME.pdf` is built from it and committed. The website serves the PDFs
   from this directory.
 - `README.md` is the landing page of the website. For every document it gives
@@ -38,9 +39,18 @@ consistency, and tightening the prose.
 ## Structure of the document
 
 - The unnumbered front matter, "About these guidelines", defines the scope,
-  the **Normative language**, and the **Terminology**.
-- Numbered sections group the principles by theme, for example Scope, API
-  design, and Numerical correctness.
+  the **Ladder of Research Software** (four rungs, with a table), the
+  **Normative language**, the two kinds of code (**Library code and
+  workflow code**, told apart by the Hollywood principle), and the
+  **Terminology**.
+- Three `\part`s group the principles by the kind of code they apply to:
+  Part I to all code, Part II only to workflow code, Part III only to library
+  code. A principle belongs in Part I unless it makes sense for only one kind
+  of code; a Part I principle says how it applies to each kind where they
+  differ. Check this before placing a principle in Part II or III.
+- Within each part, numbered sections group the principles by theme, for
+  example Scope, API design, and Numerical correctness. The document class
+  is `article`, so there are no chapters: a part is directly above a section.
 - Each `\subsection` is exactly one principle: a memorable title, followed by
   a few paragraphs that state the rule and explain it.
 
@@ -91,9 +101,12 @@ When proposing a title, offer several options.
   *should*. Choose these words deliberately, because changing a *should* to a
   *must* changes the rule.
 - Use the terms defined under "Terminology" consistently: *package*, *library
-  code*, *application layer*, *host stack*, *user-facing function*, *caller*.
-  Do not introduce synonyms for concepts that already have a term. If a new
-  concept comes up repeatedly, add it to Terminology.
+  code*, *workflow code*, *host stack*, *entry point*, *user-facing function*,
+  *caller*. Do not introduce synonyms for concepts that already have a term.
+  If a new concept comes up repeatedly, add it to Terminology. A *package* is
+  what is shipped, not a synonym for a library. Avoid calling the two kinds
+  of code "roles", because "the role of the software" in "Pay as you grow"
+  means something else.
 
 ### Consistency across the document
 
@@ -104,14 +117,20 @@ When proposing a title, offer several options.
 - Cross-reference with `Subsection~\ref{sec:...}`. A subsection that is
   referenced has a `\label{sec:kebab-case}` directly after its heading. Keep
   existing labels stable, and make sure every `\ref` still resolves after an
-  edit.
+  edit. The front-matter subsections are unnumbered, so a `\ref` to them
+  prints an empty number; refer to them by name instead.
 - The ranking in "Get your priorities right" (correctness, clarity,
   testability, maintainability, performance, features) resolves conflicts
   between principles. When a principle conflicts with another, say which one
   wins and cite the ranking.
-- "Pay as you grow": the *must* rules are the floor for all software in
-  scope, and everything above them scales with the role of the software. New
-  *must* rules should be cheap and should prevent wrong results.
+- The Ladder of Research Software (front matter) places software on one of
+  four rungs: personal, shared, released, infrastructure. The first rung is
+  in scope but requires nothing; the *must* rules are the floor from the
+  second rung on, and everything above them rises with the rung. "Pay as you
+  grow" is the principle of climbing it; keep the definition of the rungs in
+  the ladder subsection only. New *must* rules
+  should be cheap and should prevent wrong results, because they bind every
+  piece of software that anyone besides its author uses.
 - After editing a principle, check the principles that refer to it, or that
   it refers to, for contradictions.
 
@@ -123,7 +142,7 @@ When proposing a title, offer several options.
 - Match the source formatting: lines hard-wrapped at about 80 columns, blank
   lines between subsections, and `% ====` banner comments around each
   `\section`.
-- Build with `make pdf Design_Principles_for_Scientific_Software`. It runs
+- Build with `make pdf Design_Principles_for_Research_Software`. It runs
   latexmk in a Docker container and writes only the PDF to `pdf/`; the
   auxiliary files stay in the container. The build fails on undefined
   references. Commit the rebuilt PDF together with the `.tex` so the two stay
