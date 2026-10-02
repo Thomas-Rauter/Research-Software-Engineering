@@ -830,6 +830,10 @@ its input files. The default is: leave caller data untouched.
 
 
 
+% ==========================================================
+\section{Input validation and errors}
+% ==========================================================
+
 \subsection{Raise, warn, or stay silent}
 \label{sec:output}
 
@@ -869,10 +873,6 @@ data.
 
 
 
-% ==========================================================
-\section{Input validation and errors}
-% ==========================================================
-
 \subsection{Garbage in, useful error out}
 \label{sec:validation}
 
@@ -902,7 +902,7 @@ a validated entry point should not repeat the checks.
 
 
 
-\subsection{Missing values and NaN are explicit}
+\subsection{Mind the gap, don't fill it}
 \label{sec:missing}
 
 Each entry point must have a documented policy for missing values, such as
@@ -1047,7 +1047,7 @@ regressions. Performance never outranks correctness or clarity
 
 
 
-\subsection{Reproducibility: the same answer under stated conditions}
+\subsection{Once is luck, twice is science}
 \label{sec:reproducibility}
 
 Results must be reproducible. In these guidelines, reproducibility means
