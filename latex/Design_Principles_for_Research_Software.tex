@@ -93,6 +93,11 @@
 \usepackage{tabularx}
 \newcolumntype{L}{>{\raggedright\arraybackslash}X}
 
+\usepackage{tcolorbox}
+\newtcolorbox{definitionbox}{colback=myblue!6, colframe=myblue, boxrule=0pt,
+  leftrule=3pt, sharp corners, left=8pt, right=8pt, top=5pt, bottom=5pt,
+  before skip=6pt, after skip=10pt}
+
 % ==================
 % Start the document
 % ==================
@@ -218,11 +223,11 @@ Subsection~\ref{sec:quality} decide.
 The code of research software does one of two jobs, and the Hollywood
 principle tells them apart: \emph{don't call us, we'll call you}.
 
-\textbf{Library code} is a collection of reusable building blocks, such as
-functions, classes, and data types, that callers use in their own code. It
-does not decide what happens or in which order: the caller owns the program
-and decides. Library code should provide composable primitives that users
-call from their own scripts, notebooks, workflows, and host-stack tools, and
+Library code is a collection of reusable building blocks, such as functions,
+classes, and data types, that callers use in their own code. It does not
+decide what happens or in which order: the caller owns the program and
+decides. Library code should provide composable primitives that users call
+from their own scripts, notebooks, workflows, and host-stack tools, and
 should not take over the main program, the solver or simulation loop, the
 data model, or the analysis workflow. Where the method needs code from the
 user, such as an objective function, a model, or the right-hand side of a
@@ -230,35 +235,30 @@ differential equation, accept it as an ordinary function argument. Requiring
 users to subclass package classes or to register code with a package-managed
 lifecycle turns library code into a framework on top of the host stack.
 
-\textbf{Workflow code} follows the Hollywood principle: it owns the program
-and calls other code to do the work. A workflow is a defined sequence of
-steps that carries out a task from start to finish. It encodes the order of
-the steps and the inputs and outputs of each, and often branching, retries,
-parallel execution, and scheduling; the user mostly supplies inputs and
-configuration. Workflow definitions, for example for Snakemake, Nextflow, or
-Make, and the scripts of their steps are workflow code. So is the main
-function of a command-line tool, which reads the arguments and the input,
-calls library code, and writes the output: each command is a small workflow.
+\begin{definitionbox}
+\textbf{Library code} is code called by other code. It provides building
+blocks and leaves the decision of what runs, and in which order, to its
+caller.
+\end{definitionbox}
+
+Workflow code follows the Hollywood principle: it owns the program and calls
+other code to do the work. A workflow is a defined sequence of steps that
+carries out a task from start to finish. It encodes the order of the steps
+and the inputs and outputs of each, and often branching, retries, parallel
+execution, and scheduling; the user mostly supplies inputs and configuration.
+Workflow definitions, for example for Snakemake, Nextflow, or Make, and the
+scripts of their steps are workflow code. So is the main function of a
+command-line tool, which reads the arguments and the input, calls library
+code, and writes the output: each command is a small workflow.
+
+\begin{definitionbox}
+\textbf{Workflow code} is code that owns the program and calls other code. It
+decides what runs and in which order.
+\end{definitionbox}
 
 In a kitchen, library code is the knives, the pans, and the techniques;
 workflow code is the recipe, which says to chop this, then saut\'e that for
 five minutes, then combine.
-
-A package is the unit of distribution: what is installed, versioned, and
-shared. It may contain either kind of code, or both, and mixing them is
-common. A package may offer library functions for users who want fine
-control together with a command that chains them into a standard analysis,
-or ship workflow definitions as files next to its library code. A
-command-line tool that does one job, such as sorting sequence alignments or
-regridding a climate field, is therefore library code behind a thin layer of
-workflow code, while a tool that runs a whole analysis by calling other tools
-in a fixed order is a workflow, even when it is started like any other
-command.
-
-When a package contains both, workflow code calls library code, never the
-other way round. Library code should not depend on the workflow code of its
-package (Subsection~\ref{sec:modules}), so that users can reuse the building
-blocks in their own workflows without being forced into the package's own.
 
 The scientific logic of a package should be library code, where it can be
 tested, reused, and scaled without running the whole workflow. Workflow code
@@ -278,7 +278,39 @@ The principles are grouped accordingly. Part~\ref{part:general} applies to
 all code; where a principle works differently for the two kinds of code, it
 says how. Part~\ref{part:workflow} adds the principles that apply only to
 workflow code, and Part~\ref{part:library} those that apply only to library
-code.
+code. Part~\ref{part:other} describes other forms of research software, such
+as graphical applications and notebooks, and what each gains and loses
+compared with library and workflow code.
+
+
+
+\subsection*{Packages}
+\phantomsection
+\addcontentsline{toc}{subsection}{Packages}
+\label{sec:package}
+
+Library code and workflow code describe what code does. The package
+describes how it is shipped.
+
+\begin{definitionbox}
+A \textbf{package} is the unit of distribution: what is installed, versioned,
+and shared. It may contain library code, workflow code, or both, and it is
+not a synonym for a library.
+\end{definitionbox}
+
+Mixing the two kinds of code is common. A package may offer library functions
+for users who want fine control together with a command that chains them
+into a standard analysis, or ship workflow definitions as files next to its
+library code. A command-line tool that does one job, such as sorting sequence
+alignments or regridding a climate field, is therefore library code behind a
+thin layer of workflow code, while a tool that runs a whole analysis by
+calling other tools in a fixed order is a workflow, even when it is started
+like any other command.
+
+When a package contains both, workflow code calls library code, never the
+other way round. Library code should not depend on the workflow code of its
+package (Subsection~\ref{sec:modules}), so that users can reuse the building
+blocks in their own workflows without being forced into the package's own.
 
 
 
@@ -288,13 +320,12 @@ code.
 \label{sec:terminology}
 
 \begin{description}
-  \item[Package] The unit of distribution: the software as a whole, as it is
-    installed, versioned, and shared. A package may contain library code,
-    workflow code, or both; it is not a synonym for a library.
-  \item[Library code] The code in a package that other code calls.
-  \item[Workflow code] The code in a package that owns the program and calls
-    other code: workflow definitions, the scripts of their steps, and the
-    main functions of command-line tools.
+  \item[Package] The unit of distribution: what is installed, versioned, and
+    shared (\hyperref[sec:package]{Packages}).
+  \item[Library code] Code called by other code
+    (\hyperref[sec:library]{Library code and workflow code}).
+  \item[Workflow code] Code that owns the program and calls other code
+    (\hyperref[sec:library]{Library code and workflow code}).
   \item[Host stack] The software ecosystem the user already works in: the
     programming language, its standard array and data-frame types, its
     established numerical, statistical, and plotting libraries, and the
@@ -551,27 +582,6 @@ integration tests. They document intent, they fail when the design drifts away
 from practice, and they force every proposed feature to name the concrete task
 that justifies it. Software is a practical artifact and can only be judged in
 use.
-
-
-
-\subsection{No code at large}
-\label{sec:functions}
-
-Code lives in functions and classes. At module level, only imports, named
-constants (Subsection~\ref{sec:magic-numbers}), and definitions belong. A
-statement that does work there runs on every import
-(Subsection~\ref{sec:import}), cannot be tested in isolation, and tends to
-communicate through global variables. A script follows the same rule: its
-logic goes into a main function, and the top level of the script only calls
-it.
-
-Prefer functions. Most scientific operations take data and parameters and
-return a result, which a function expresses directly and which is easy to test
-and compose. Use a class when there is state with invariants to protect, such
-as a fitted model, or a result that carries its values together with
-diagnostics and provenance (Subsection~\ref{sec:traceability}). A class that
-only groups functions, or stores its arguments for its methods to read back,
-should be a function.
 
 
 
@@ -1288,6 +1298,25 @@ module that the others import (Subsection~\ref{sec:dry}).
 
 
 
+\subsection{No code at large}
+\label{sec:functions}
+
+Library code lives in functions and classes. At module level, only imports,
+named constants (Subsection~\ref{sec:magic-numbers}), and definitions belong.
+A statement that does work there runs on every import
+(Subsection~\ref{sec:import}), cannot be tested in isolation, and tends to
+communicate through global variables.
+
+Prefer functions. Most scientific operations take data and parameters and
+return a result, which a function expresses directly and which is easy to test
+and compose. Use a class when there is state with invariants to protect, such
+as a fitted model, or a result that carries its values together with
+diagnostics and provenance (Subsection~\ref{sec:traceability}). A class that
+only groups functions, or stores its arguments for its methods to read back,
+should be a function.
+
+
+
 \subsection{Avoid plotting in core functionality}
 \label{sec:plotting}
 
@@ -1488,5 +1517,212 @@ destabilizes everything that depends on the package.
 
 Put optional heavy setup behind an explicit function the caller invokes.
 Loading the package should be cheap and silent.
+
+
+
+% ==========================================================
+\part{Other code forms}
+\label{part:other}
+% ==========================================================
+
+Libraries and workflows are the backbone of most research software, but not
+its only forms. This part describes the most common other forms, and what
+each gains and loses compared with library and workflow code alone. The list
+is not exhaustive.
+
+Inside, each form still consists of the two kinds of code. The part that owns
+the program, such as the event loop of a graphical application or the request
+handler of a web service, is workflow code, and the science it calls should be
+library code that works without it
+(\hyperref[sec:library]{Library code and workflow code}). The form is then a
+front end: the same method can still be tested, scripted, and run at scale,
+and Parts~\ref{part:general} to~\ref{part:library} apply to its code as to any
+other.
+
+
+
+% ==========================================================
+\section{Graphical applications}
+\label{sec:gui}
+% ==========================================================
+
+A graphical application is a standalone program that users operate through
+windows, menus, and dialogs, such as a viewer and annotation tool for
+microscopy images, software that controls a laboratory instrument, or a
+desktop tool for exploring spectra.
+
+\textbf{Advantages.}
+\begin{itemize}
+  \item It is the most accessible interface for humans. Users need no
+    programming, and the interface can guide them through an analysis and
+    show each result at once.
+  \item It limits accidental damage. Users work further away from the source
+    code, so they cannot change the method by mistake or call it in ways it
+    was never meant to be called.
+  \item It suits tasks that need human judgment at every step, such as drawing
+    regions of interest or curating annotations.
+\end{itemize}
+
+\textbf{Disadvantages.}
+\begin{itemize}
+  \item It is much more work to build and maintain. The interface code often
+    outgrows the science, and graphical toolkits change between versions and
+    operating systems.
+  \item It is less flexible. Users are limited to what the interface offers,
+    which is the other side of the second advantage, and every analysis
+    carries the overhead of the interface, even when no human needs to look
+    at it.
+  \item It is poor for machines. A sequence of clicks cannot be scripted,
+    scheduled on a cluster, or repeated for thousands of datasets.
+  \item It is hard to test and to trace. Tests of an interface are slow and
+    brittle, and a result obtained through dialogs leaves no record of its
+    parameters unless the application writes one
+    (Subsection~\ref{sec:traceability}).
+\end{itemize}
+
+
+
+% ==========================================================
+\section{Web applications and services}
+\label{sec:web}
+% ==========================================================
+
+A web application runs on a server and is used through a browser, such as an
+interactive dashboard built with Shiny in R or Streamlit in Python, or an
+analysis platform such as Galaxy. A web service offers the same through a
+network interface that other programs call.
+
+\textbf{Advantages.}
+\begin{itemize}
+  \item Nothing has to be installed. Users need only a browser, and one
+    deployment serves everyone with the same version.
+  \item It brings users to data and computing power they do not have
+    themselves, such as large reference databases or accelerators.
+  \item A web service serves machines as well as humans, and from any
+    programming language.
+\end{itemize}
+
+\textbf{Disadvantages.}
+\begin{itemize}
+  \item Someone has to run it for as long as it exists: servers, security
+    updates, user accounts, and costs. When the funding ends, the service
+    often disappears, and with it the means to reproduce the results
+    computed with it.
+  \item Users cannot pin its version (Subsection~\ref{sec:pin}). The service
+    changes under them, so results have to record the version of the service
+    that produced them (Subsection~\ref{sec:traceability}).
+  \item Data have to travel to the server, which is a problem for large data
+    and for sensitive data, such as patient records.
+\end{itemize}
+
+
+
+% ==========================================================
+\section{Notebooks}
+\label{sec:notebooks}
+% ==========================================================
+
+A notebook is a document that mixes code, its output, and prose, such as a
+Jupyter notebook or an R Markdown or Quarto document. In the terms of these
+guidelines, a notebook is workflow code: it owns the program and calls
+library code.
+
+\textbf{Advantages.}
+\begin{itemize}
+  \item Code, results, figures, and explanation sit in one document, which
+    suits exploring data, explaining an analysis, and teaching.
+  \item Feedback is immediate: run a cell and see the result.
+  \item As examples in the documentation of a library, notebooks show users
+    how to call it, in a form they can run.
+\end{itemize}
+
+\textbf{Disadvantages.}
+\begin{itemize}
+  \item Cells can run in any order, so the output shown need not come from the
+    code shown, and a notebook that worked yesterday may fail or give a
+    different result when run from the top (Subsection~\ref{sec:loud}). Run
+    it from the top in a fresh session before trusting a result.
+  \item Some formats, such as Jupyter's, store output and metadata together
+    with the code, which makes notebooks hard to review and to compare
+    between versions.
+  \item Code in a notebook cannot be called from elsewhere, so it tends to be
+    copied from notebook to notebook (Subsection~\ref{sec:dry}). Code that a
+    second notebook needs moves into library code, as for any workflow code.
+  \item Running a notebook on a cluster, or for many inputs, needs extra
+    tools.
+\end{itemize}
+
+
+
+% ==========================================================
+\section{Simulation codes}
+\label{sec:simulation}
+% ==========================================================
+
+A simulation code is a large program that simulates a physical, chemical,
+biological, or social system, such as a climate model, a molecular dynamics
+engine, a fluid dynamics solver, or an epidemic model. It owns the program:
+it reads an input file that describes the simulation, runs a time-stepping or
+iterative loop, and writes the results, often in parallel on a cluster.
+
+\textbf{Advantages.}
+\begin{itemize}
+  \item One program can control memory layout, parallel execution, and input
+    and output as a whole, and reach a performance that a chain of separate
+    steps cannot.
+  \item An input file describes a simulation completely. It can be versioned,
+    shared, reviewed, and rerun, which helps reproducibility as long as the
+    version of the code is recorded with it
+    (Subsection~\ref{sec:traceability}).
+  \item Established community codes carry years of validation that a new
+    implementation would have to repeat.
+\end{itemize}
+
+\textbf{Disadvantages.}
+\begin{itemize}
+  \item Its parts are hard to reuse. The science is often entangled with the
+    main loop, the data structures, and the parallel layout, so no part can
+    be called on its own, and users extend the code by editing its source or
+    by writing routines for fixed hooks: the code is a framework, not a
+    library (\hyperref[sec:library]{Library code and workflow code}).
+  \item Testing is expensive, because a realistic run takes hours on many
+    processors. Tests need small, cheap configurations and invariants such
+    as conservation laws (Subsection~\ref{sec:invariants}).
+  \item Input files often have hundreds of options whose defaults change
+    results (Subsection~\ref{sec:numeric-defaults}), and building the code
+    depends on the compilers and libraries of a computing center, which makes
+    runs hard to reproduce elsewhere.
+\end{itemize}
+
+
+
+% ==========================================================
+\section{Plugins}
+\label{sec:plugins}
+% ==========================================================
+
+A plugin extends an existing application instead of standing alone, such as a
+plugin for an image analysis platform like Fiji or napari, for a geographic
+information system like QGIS, or for a network analysis tool like Cytoscape.
+The host application calls the plugin at fixed points.
+
+\textbf{Advantages.}
+\begin{itemize}
+  \item It reaches users where they already work. They need no new tool, and
+    the plugin can use the interface, file formats, and visualization of the
+    host instead of building its own.
+  \item The host's plugin repository distributes and updates it.
+\end{itemize}
+
+\textbf{Disadvantages.}
+\begin{itemize}
+  \item It is tied to the host. It can do only what the host's plugin
+    interface allows, it breaks when that interface changes, and it lives
+    only as long as the host does.
+  \item A method written against the host's data model cannot be used outside
+    the host, for example from a script or a workflow. Keep the plugin a thin
+    adapter around library code that works without the host.
+  \item Testing needs the host, or a stand-in for it.
+\end{itemize}
 
 \end{document}

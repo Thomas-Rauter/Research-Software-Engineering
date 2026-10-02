@@ -41,13 +41,22 @@ consistency, and tightening the prose.
 - The unnumbered front matter, "About these guidelines", defines the scope,
   the **Ladder of Research Software** (four rungs, with a table), the
   **Normative language**, the two kinds of code (**Library code and
-  workflow code**, told apart by the Hollywood principle), and the
-  **Terminology**.
+  workflow code**, told apart by the Hollywood principle), **Packages**, and
+  the **Terminology**. The formal definitions of library code, workflow
+  code, and package stand out in `definitionbox` environments; the
+  Terminology entries repeat only their first sentence and link to them.
 - Three `\part`s group the principles by the kind of code they apply to:
   Part I to all code, Part II only to workflow code, Part III only to library
   code. A principle belongs in Part I unless it makes sense for only one kind
   of code; a Part I principle says how it applies to each kind where they
   differ. Check this before placing a principle in Part II or III.
+- Part IV, "Other code forms", is descriptive, not a set of principles. Each
+  of its sections covers one common form besides libraries and workflows
+  (graphical applications, web applications and services, notebooks,
+  simulation codes, plugins) with its advantages and disadvantages compared
+  with library and workflow code. These sections have no subsections. The
+  rule that the science inside every form should be library code is stated
+  once, in the introduction of Part IV; do not repeat it per section.
 - Within each part, numbered sections group the principles by theme, for
   example Scope, API design, and Numerical correctness. The document class
   is `article`, so there are no chapters: a part is directly above a section.
