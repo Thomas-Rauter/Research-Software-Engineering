@@ -236,24 +236,31 @@ users to subclass package classes or to register code with a package-managed
 lifecycle turns library code into a framework on top of the host stack.
 
 \begin{definitionbox}
-\textbf{Library code} is code called by other code. It provides building
-blocks and leaves the decision of what runs, and in which order, to its
-caller.
+\textbf{Library code} is called and returns. Its caller decides how the work
+is done, step by step: what runs, in which order, and what happens with each
+result.
 \end{definitionbox}
 
 Workflow code follows the Hollywood principle: it owns the program and calls
 other code to do the work. A workflow is a defined sequence of steps that
 carries out a task from start to finish. It encodes the order of the steps
 and the inputs and outputs of each, and often branching, retries, parallel
-execution, and scheduling; the user mostly supplies inputs and configuration.
-Workflow definitions, for example for Snakemake, Nextflow, or Make, and the
-scripts of their steps are workflow code. So is the main function of a
-command-line tool, which reads the arguments and the input, calls library
+execution, and scheduling.
+
+Like library code, workflow code has a caller: a person, a machine, or a
+program that starts it, usually by running a command, and receives its
+results. That caller decides whether the workflow runs and with
+which inputs and configuration, but not how. The caller may itself be
+workflow code, as when a larger workflow runs a smaller one as one of its
+steps. Workflow definitions, for example for Snakemake, Nextflow, or Make,
+and the scripts of their steps are workflow code. So is the main function of
+a command-line tool, which reads the arguments and the input, calls library
 code, and writes the output: each command is a small workflow.
 
 \begin{definitionbox}
-\textbf{Workflow code} is code that owns the program and calls other code. It
-decides what runs and in which order.
+\textbf{Workflow code} is called and takes control. Its caller decides only
+whether it runs and with which inputs; the workflow code decides how: what
+runs, in which order, and which other code does the work.
 \end{definitionbox}
 
 In a kitchen, library code is the knives, the pans, and the techniques;
@@ -322,9 +329,9 @@ blocks in their own workflows without being forced into the package's own.
 \begin{description}
   \item[Package] The unit of distribution: what is installed, versioned, and
     shared (\hyperref[sec:package]{Packages}).
-  \item[Library code] Code called by other code
+  \item[Library code] Code that is called and returns
     (\hyperref[sec:library]{Library code and workflow code}).
-  \item[Workflow code] Code that owns the program and calls other code
+  \item[Workflow code] Code that is called and takes control
     (\hyperref[sec:library]{Library code and workflow code}).
   \item[Host stack] The software ecosystem the user already works in: the
     programming language, its standard array and data-frame types, its
@@ -339,8 +346,7 @@ blocks in their own workflows without being forced into the package's own.
   \item[User-facing function] Any function, class, or method that is
     documented for users, including low-level primitives. Together, the
     user-facing functions form the public API; everything else is internal.
-  \item[Caller] The code that calls an entry point, and by extension the user
-    who wrote or runs it.
+  \item[Caller] The person, machine, or code that calls an entry point.
 \end{description}
 
 
