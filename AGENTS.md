@@ -20,6 +20,13 @@ numerical stability, conditioning and convergence, units and axis
 conventions, missing values, numerical defaults as part of the API,
 reproducibility, and traceability of results.
 
+The second document, *Testing Research Software*, is about how to test
+research software. It stands beside *Design Principles*, not below it: the
+two form one set of guidelines, and neither is presented as a companion or
+appendix of the other. Its core idea is that a test is only as good as its
+oracle, the source of its expected value. It is short and meant for looking
+things up while working, not for reading from cover to cover.
+
 This is a writing project, not a code project. Typical tasks are adding or
 revising a principle, finding a better title, checking the document for
 consistency, and tightening the prose.
@@ -28,7 +35,8 @@ consistency, and tightening the prose.
 
 - `latex/NAME.tex` is the source of a document and the source of truth. All
   edits go here, for example to
-  `latex/Design_Principles_for_Research_Software.tex`.
+  `latex/Design_Principles_for_Research_Software.tex` or
+  `latex/Testing_Research_Software.tex`.
 - `pdf/NAME.pdf` is built from it and committed. The website serves the PDFs
   from this directory.
 - `README.md` is the landing page of the website. For every document it gives
@@ -36,7 +44,7 @@ consistency, and tightening the prose.
 - `Makefile` and `build/Dockerfile` build the PDFs; `build/README.md`
   explains how. `_config.yml` configures the website.
 
-## Structure of the document
+## Structure of the design principles
 
 - The unnumbered front matter, "About these guidelines", defines the scope,
   the **Ladder of Research Software** (four rungs, with a table), the
@@ -45,6 +53,11 @@ consistency, and tightening the prose.
   the **Terminology**. The formal definitions of library code, workflow
   code, and package stand out in `definitionbox` environments; the
   Terminology entries repeat only their first sentence and link to them.
+- "At a glance" follows the front matter and starts on a page of its own:
+  every principle of Parts I to III, grouped by part and section, with its
+  number, its title, and a one-line rule. Part IV has no rows, because it
+  states no principles. The table is an `xltabular`, so it breaks across
+  pages.
 - Three `\part`s group the principles by the kind of code they apply to:
   Part I to all code, Part II only to workflow code, Part III only to library
   code. A principle belongs in Part I unless it makes sense for only one kind
@@ -62,6 +75,44 @@ consistency, and tightening the prose.
   is `article`, so there are no chapters: a part is directly above a section.
 - Each `\subsection` is exactly one principle: a memorable title, followed by
   a few paragraphs that state the rule and explain it.
+
+## Structure of the testing guide
+
+- The unnumbered front matter, "About this guide", says what the guide
+  covers and what *Design Principles* covers instead. "Normative language and
+  the ladder" adopts both from *Design Principles* without restating them,
+  and "Terminology" defines only the terms of testing (oracle, tolerance,
+  snapshot test, and so on); the other terms are used as defined in *Design
+  Principles*.
+- "At a glance" follows on a page of its own, as in *Design Principles*:
+  every principle with its number, its title, and a one-line rule.
+- Three numbered `\section`s, without `\part`s: "Where correctness comes
+  from" (the oracles), "Writing tests", and "Keeping tests honest". Each
+  `\subsection` is one principle, as in *Design Principles*, but shorter: one
+  to three paragraphs.
+- The table of oracles for common kinds of code sits in "A test is only as
+  good as its oracle". Keep it in step with the oracle principles.
+- The guide is prose only: no code examples in any language. Naming tools,
+  such as pytest or Hypothesis, is fine.
+
+## The two documents
+
+- They form one set of guidelines. The testing guide uses the normative
+  language, the ladder, the terminology, and the priorities of *Design
+  Principles*, and its *must*s are part of the same floor.
+- The split: *Design Principles* says *that* code is tested and what the
+  software itself must do, including checks the code makes on every run,
+  such as validation and assertions. The testing guide says *how* tests are
+  written and maintained. "Testing is not optional" and "Test the whole
+  workflow on a small dataset" stay in *Design Principles*. Before adding a
+  principle about testing, decide by this rule which document it belongs in.
+- DRY holds across both: each rule is stated in one document only, and the
+  other cites it.
+- A `\ref` cannot reach into the other PDF, so the documents cite each
+  other's principles by title: `\TestingRef{Title}` in *Design Principles*
+  and `\DesignRef{Title}` in the testing guide, defined in the customization
+  zone. The title is the reference, so renaming a principle means searching
+  the other document for the old title and updating it.
 
 ## Writing a principle
 
@@ -123,11 +174,18 @@ When proposing a title, offer several options.
   place, and other principles refer to it instead of restating it. Before
   adding a principle, check whether an existing one already covers it;
   extending that one or referring to it is often better.
-- Cross-reference with `Subsection~\ref{sec:...}`. A subsection that is
-  referenced has a `\label{sec:kebab-case}` directly after its heading. Keep
-  existing labels stable, and make sure every `\ref` still resolves after an
+- Cross-reference with `Subsection~\ref{sec:...}`. Every section and
+  subsection has a `\label{sec:kebab-case}` directly after its heading,
+  because "At a glance" refers to all of them; give a new one a label too.
+  Keep existing labels stable, and make sure every `\ref` still resolves after an
   edit. The front-matter subsections are unnumbered, so a `\ref` to them
   prints an empty number; refer to them by name instead.
+- Both documents have an "At a glance" table. Its rows take the number and
+  the title of each principle from its label (`\ref`, `\nameref`), and the
+  macros `\GlancePart` and `\GlanceSection` write the header rows. The
+  one-line rule is written by hand: when you add, move, or change a
+  principle, add or update its row, and keep the rule true to the principle,
+  including its *must* or *should*.
 - The ranking in "Get your priorities right" (correctness, clarity,
   testability, maintainability, performance, features) resolves conflicts
   between principles. When a principle conflicts with another, say which one
@@ -141,7 +199,8 @@ When proposing a title, offer several options.
   should be cheap and should prevent wrong results, because they bind every
   piece of software that anyone besides its author uses.
 - After editing a principle, check the principles that refer to it, or that
-  it refers to, for contradictions.
+  it refers to, for contradictions, including citations in the other
+  document.
 
 ## Working on the LaTeX
 

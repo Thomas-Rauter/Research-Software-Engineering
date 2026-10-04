@@ -91,12 +91,25 @@
 \usepackage{tikz}
 \usepackage{booktabs}
 \usepackage{tabularx}
+\usepackage{xltabular}
 \newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{T}{>{\raggedright\arraybackslash}p{0.36\textwidth}}
+
+% Header rows of the table "At a glance": a part or a section, with its
+% number and its title.
+\newcommand{\GlancePart}[1]{%
+  \multicolumn{3}{@{}l}{\normalsize\textbf{Part~\ref{#1}\quad\nameref{#1}}}}
+\newcommand{\GlanceSection}[1]{%
+  \multicolumn{3}{@{}l}{\textbf{\ref{#1}\quad\nameref{#1}}}}
 
 \usepackage{tcolorbox}
 \newtcolorbox{definitionbox}{colback=myblue!6, colframe=myblue, boxrule=0pt,
   leftrule=3pt, sharp corners, left=8pt, right=8pt, top=5pt, bottom=5pt,
   before skip=6pt, after skip=10pt}
+
+% Cite a principle of the other document by its title. A \ref cannot
+% reach into another PDF, so the title is the reference.
+\newcommand{\TestingRef}[1]{\emph{Testing Research Software}, ``#1''}
 
 % ==================
 % Start the document
@@ -122,6 +135,13 @@ software starts at the bottom, and much of it should stay there. The
 principles in these guidelines are what it takes to climb. Usually the
 science is known; the task is to make it reliable, automated, and fit to run
 at scale.
+
+How to test research software is the subject of a separate document,
+\emph{Testing Research Software}. The two form one set of guidelines: that
+document uses the ladder, the normative language, and the terminology
+defined here, and its rules carry the same weight. Each rule is stated in
+only one of the two documents, and each cites the principles of the other by
+their title.
 
 
 
@@ -351,6 +371,194 @@ blocks in their own workflows without being forced into the package's own.
 
 
 
+% The checklist starts on a page of its own, so that it can be printed.
+\clearpage
+% ==========================================================
+\section*{At a glance}
+\phantomsection
+\addcontentsline{toc}{section}{At a glance}
+% ==========================================================
+
+Every principle of these guidelines in one line. The number and the title
+link to the principle. Part~\ref{part:other} describes other code forms and
+states no principles of its own.
+
+\begingroup
+\small
+\begin{xltabular}{\textwidth}{@{}lTL@{}}
+  \toprule
+  \GlancePart{part:general} \\*
+  \addlinespace[4pt]
+  \GlanceSection{sec:priorities} \\*
+  \midrule
+  \ref{sec:right-thing} & \nameref{sec:right-thing}
+    & Make sure the approach is right before investing in optimization, testing,
+      or polish. \\
+  \ref{sec:quality} & \nameref{sec:quality}
+    & When goals conflict, correctness wins, then clarity, testability,
+      maintainability, performance, and features. \\
+  \ref{sec:loud} & \nameref{sec:loud}
+    & Fail visibly rather than return a result that looks valid but cannot be
+      trusted. \\
+  \ref{sec:role} & \nameref{sec:role}
+    & Invest what the rung of the software on the ladder demands, and climb
+      before new users rely on it. \\
+  \ref{sec:kiss} & \nameref{sec:kiss}
+    & Prefer the design with the fewest concepts, options, and special cases
+      that solves the problem well. \\
+  \addlinespace
+  \GlanceSection{sec:scope} \\*
+  \midrule
+  \ref{sec:core-domain} & \nameref{sec:core-domain}
+    & Write custom code only for the distinctive scientific problem, and reuse
+      mature libraries for the rest. \\
+  \ref{sec:sustainability} & \nameref{sec:sustainability}
+    & Judge every feature and dependency by what it costs over the lifetime of
+      the software. \\
+  \addlinespace
+  \GlanceSection{sec:abstraction} \\*
+  \midrule
+  \ref{sec:applications} & \nameref{sec:applications}
+    & Build for concrete applications that someone wants to run, and keep them
+      as runnable examples or tests. \\
+  \ref{sec:dry} & \nameref{sec:dry}
+    & Give every piece of knowledge, such as a constant, a rule, or a
+      convention, one authoritative definition. \\
+  \ref{sec:magic-numbers} & \nameref{sec:magic-numbers}
+    & Name, define once, and justify every constant with a scientific or
+      numerical role. \\
+  \ref{sec:wrong-abstraction} & \nameref{sec:wrong-abstraction}
+    & Unify similar code only when it encodes the same rule. \\
+  \addlinespace
+  \GlanceSection{sec:api} \\*
+  \midrule
+  \ref{sec:api-first} & \nameref{sec:api-first}
+    & Write the code the user would write before the code that makes it work. \\
+  \ref{sec:conventions} & \nameref{sec:conventions}
+    & State axis order, units, and conventions explicitly, and keep identifiers
+      aligned with the data. \\
+  \ref{sec:numeric-defaults} & \nameref{sec:numeric-defaults}
+    & Treat a change of a numerical default as a breaking change. \\
+  \ref{sec:stable-api} & \nameref{sec:stable-api}
+    & Keep the public API small, number releases by compatibility, and deprecate
+      before removing. \\
+  \ref{sec:document-method} & \nameref{sec:document-method}
+    & Document the algorithm, its assumptions, defaults, and references, not the
+      structure of the code. \\
+  \addlinespace
+  \GlanceSection{sec:explicit-behavior} \\*
+  \midrule
+  \ref{sec:explicit} & \nameref{sec:explicit}
+    & Do what the name and the arguments say, and nothing more. \\
+  \ref{sec:no-guess} & \nameref{sec:no-guess}
+    & Never infer the user's intent from the data; make the user choose. \\
+  \ref{sec:mutation} & \nameref{sec:mutation}
+    & Leave the caller's data untouched, unless the user opts into an in-place
+      operation. \\
+  \addlinespace
+  \GlanceSection{sec:errors} \\*
+  \midrule
+  \ref{sec:output} & \nameref{sec:output}
+    & Raise for invalid calls, warn for probable mistakes, and otherwise stay
+      silent. \\
+  \ref{sec:validation} & \nameref{sec:validation}
+    & Validate inputs at the point of entry, with errors that say how to fix the
+      call. \\
+  \ref{sec:missing} & \nameref{sec:missing}
+    & Document a policy for missing values at every entry point, and never
+      impute or drop them silently. \\
+  \ref{sec:assertions} & \nameref{sec:assertions}
+    & Assert the key invariants of a method in the code, on every run. \\
+  \addlinespace
+  \GlanceSection{sec:numerics} \\*
+  \midrule
+  \ref{sec:stability} & \nameref{sec:stability}
+    & Choose formulations that stay accurate over the whole input range. \\
+  \ref{sec:convergence} & \nameref{sec:convergence}
+    & Report ill-conditioned problems, and never return an unconverged result as
+      if it had converged. \\
+  \addlinespace
+  \GlanceSection{sec:testing-reproducibility} \\*
+  \midrule
+  \ref{sec:testing} & \nameref{sec:testing}
+    & Test every entry point, and pass the full test suite before every release.
+      \\
+  \ref{sec:size-matters} & \nameref{sec:size-matters}
+    & Document the complexity of every entry point, and benchmark at the sizes
+      of real applications. \\
+  \ref{sec:reproducibility} & \nameref{sec:reproducibility}
+    & Make results reproducible within a stated tolerance, with randomness that
+      the caller controls. \\
+  \ref{sec:traceability} & \nameref{sec:traceability}
+    & Expose the version, archive every release, and record the version and the
+      parameters with every result. \\
+  \addlinespace[10pt]
+  \GlancePart{part:workflow} \\*
+  \addlinespace[4pt]
+  \GlanceSection{sec:steps} \\*
+  \midrule
+  \ref{sec:declared-inputs} & \nameref{sec:declared-inputs}
+    & Declare to the workflow manager everything the outputs of a step depend
+      on. \\
+  \ref{sec:hand-off} & \nameref{sec:hand-off}
+    & Pass data between steps without losing values, precision, missing values,
+      units, or identifiers. \\
+  \ref{sec:all-or-nothing} & \nameref{sec:all-or-nothing}
+    & A step writes all of its outputs, or fails and leaves none that look
+      complete. \\
+  \addlinespace
+  \GlanceSection{sec:environments} \\*
+  \midrule
+  \ref{sec:pin} & \nameref{sec:pin}
+    & Run every step in an environment whose versions are pinned exactly. \\
+  \ref{sec:end-to-end} & \nameref{sec:end-to-end}
+    & Run the whole workflow on a small dataset on every change, and check its
+      outputs. \\
+  \addlinespace[10pt]
+  \GlancePart{part:library} \\*
+  \addlinespace[4pt]
+  \GlanceSection{sec:library-structure} \\*
+  \midrule
+  \ref{sec:modules} & \nameref{sec:modules}
+    & Give each module one responsibility, with dependencies pointing from the
+      specific to the fundamental. \\
+  \ref{sec:functions} & \nameref{sec:functions}
+    & Put library code in functions and classes; at module level, only imports,
+      constants, and definitions. \\
+  \ref{sec:plotting} & \nameref{sec:plotting}
+    & Keep plotting out of computation, in separate functions with an optional
+      dependency. \\
+  \addlinespace
+  \GlanceSection{sec:interfaces} \\*
+  \midrule
+  \ref{sec:no-files} & \nameref{sec:no-files}
+    & Take and return data objects, and leave reading and writing files to the
+      caller. \\
+  \ref{sec:layers} & \nameref{sec:layers}
+    & Offer the API in layers, each built from the public primitives of the
+      layer below. \\
+  \ref{sec:follow-types} & \nameref{sec:follow-types}
+    & Keep the type, precision, and placement of the caller's data. \\
+  \ref{sec:validation-cost} & \nameref{sec:validation-cost}
+    & Always run cheap metadata checks; run data checks by default, with an
+      explicit way to turn them off. \\
+  \addlinespace
+  \GlanceSection{sec:side-effects} \\*
+  \midrule
+  \ref{sec:global-state} & \nameref{sec:global-state}
+    & Never change process-wide settings, such as the global random generator or
+      the number of threads. \\
+  \ref{sec:cost} & \nameref{sec:cost}
+    & Never densify, materialize, download, or move data as a hidden side
+      effect. \\
+  \ref{sec:import} & \nameref{sec:import}
+    & Keep loading the package cheap and silent. \\
+  \bottomrule
+\end{xltabular}
+\endgroup
+
+
+
 % ==========================================================
 \part{All code}
 \label{part:general}
@@ -360,9 +568,11 @@ blocks in their own workflows without being forced into the package's own.
 
 % ==========================================================
 \section{Guiding priorities}
+\label{sec:priorities}
 % ==========================================================
 
 \subsection{Build the right thing before building the thing right}
+\label{sec:right-thing}
 
 Establish that the overall approach is correct before investing in
 optimization, testing, documentation, or polish. Effort spent in the wrong
@@ -488,6 +698,7 @@ first rung is not a failure.
 
 
 \subsection{KISS: Keep it simple, stupid}
+\label{sec:kiss}
 
 Prefer the simplest design that solves the problem well. Simplicity is
 measured by how much a reader has to hold in mind to understand the code and
@@ -508,6 +719,7 @@ such as missing values or edge cases, is not simple but incomplete.
 
 % ==========================================================
 \section{Scope}
+\label{sec:scope}
 % ==========================================================
 
 \subsection{Own only the core domain}
@@ -563,6 +775,7 @@ belongs in the repository, not in people's heads.
 
 % ==========================================================
 \section{Code structure and abstraction}
+\label{sec:abstraction}
 % ==========================================================
 
 \subsection{Derive abstractions from applications, not applications from abstractions}
@@ -659,9 +872,11 @@ new abstraction only once the genuinely shared rule has become visible.
 
 % ==========================================================
 \section{API design}
+\label{sec:api}
 % ==========================================================
 
 \subsection{Write the API first}
+\label{sec:api-first}
 
 Write the code the user would write before writing the code that makes it work.
 The calling code is the part that must be good, because it is the part users
@@ -770,6 +985,7 @@ implementation.
 
 % ==========================================================
 \section{Explicit behavior}
+\label{sec:explicit-behavior}
 % ==========================================================
 
 \subsection{Do what it says on the tin}
@@ -832,6 +1048,7 @@ its input files. The default is: leave caller data untouched.
 
 % ==========================================================
 \section{Input validation and errors}
+\label{sec:errors}
 % ==========================================================
 
 \subsection{Raise, warn, or stay silent}
@@ -931,10 +1148,10 @@ assertions complement the tests; they do not replace them.
 Assert what must hold if the code is correct and whose violation would
 otherwise go unnoticed, such as a normalization, a conservation law, or the
 alignment of identifiers after a reordering. These are often the same
-invariants the tests check (Subsection~\ref{sec:invariants}). Keep assertions
-cheap (Subsection~\ref{sec:cost}), and do not assert what holds by
-construction or what validation already guarantees; mistakes of the caller
-belong to validation (Subsection~\ref{sec:validation}).
+invariants the tests check (\TestingRef{Test invariants, not only examples}).
+Keep assertions cheap (Subsection~\ref{sec:cost}), and do not assert what
+holds by construction or what validation already guarantees; mistakes of the
+caller belong to validation (Subsection~\ref{sec:validation}).
 
 A failed assertion means the package has a bug. It must raise, never warn,
 and its message should say so and ask for a report, rather than tell the user
@@ -946,6 +1163,7 @@ instead.
 
 % ==========================================================
 \section{Numerical correctness}
+\label{sec:numerics}
 % ==========================================================
 
 \subsection{Prefer numerically stable formulations}
@@ -973,7 +1191,7 @@ include:
 Reuse the stable routines of mature libraries rather than reimplementing them
 (Subsection~\ref{sec:core-domain}). Test behavior at the boundaries of the
 input range, such as very small and very large magnitudes and nearly singular
-inputs, as part of the invariant tests of Subsection~\ref{sec:invariants}.
+inputs (\TestingRef{Most bugs live at the edges}).
 
 
 
@@ -998,6 +1216,7 @@ the number of iterations and the final residual.
 
 % ==========================================================
 \section{Testing and reproducibility}
+\label{sec:testing-reproducibility}
 % ==========================================================
 
 \subsection{Testing is not optional}
@@ -1006,30 +1225,19 @@ the number of iterations and the final residual.
 Scientific code is particularly prone to subtle errors that produce plausible
 but wrong numbers. Every entry point must have tests, and every release must
 pass the full test suite. The steps of a workflow are tested by running the
-whole workflow on a small dataset (Subsection~\ref{sec:end-to-end}).
+whole workflow on a small dataset (Subsection~\ref{sec:end-to-end}). Passing
+tests show correctness only as far as their expected values are right; where
+these come from, and how to write and maintain tests, is the subject of
+\emph{Testing Research Software}.
 
 Tests should cover error paths as well as results: invalid inputs must be
-shown to raise the documented errors (Subsection~\ref{sec:validation}). Every
-fixed bug should gain a regression test that fails without the fix. Test the
-range of input types the package claims to support, such as sparse,
+shown to raise the documented errors (Subsection~\ref{sec:validation}). Test
+the range of input types the package claims to support, such as sparse,
 single-precision, or lazy data (Subsection~\ref{sec:follow-types}); a code
 path that is never exercised is not supported.
 
 Run the test suite automatically on every change, across the versions of the
 language and of the host-stack libraries that the package supports.
-
-
-
-\subsection{Test invariants, not only examples}
-\label{sec:invariants}
-
-Passing on a few happy-path inputs is a weak scientific test. Prefer
-invariants: conservation laws, symmetries, known analytic solutions and
-limiting cases, consistency relations such as counts and normalizations, and
-agreement with an independent implementation.
-
-Examples are useful, but they do not prove that the method is correct. Encode
-the scientific claims the software makes and test those claims directly.
 
 
 
@@ -1073,40 +1281,6 @@ ensure that results still agree within the stated tolerance.
 
 
 
-\subsection{Compare floats with tolerance}
-\label{sec:float-tests}
-
-Tests should compare floating-point results within a tolerance, not bit for
-bit. Bit-identical reference files treat platform noise as a logic bug and
-make the test suite fragile.
-
-Assert agreement within the tolerance that defines reproducibility
-(Subsection~\ref{sec:reproducibility}). Use relative tolerances for quantities
-of varying magnitude and absolute tolerances for quantities near zero.
-Tolerances are constants in the sense of Subsection~\ref{sec:magic-numbers}:
-derive each from the expected numerical error of the method, rather than
-adjusting it until the tests pass on one machine.
-
-
-
-\subsection{Flaky tests cry wolf}
-\label{sec:flaky-tests}
-
-A test that fails at random teaches people to ignore failures, and a test
-suite whose failures are ignored checks nothing. Tests of stochastic methods
-must therefore fix the random generator (Subsection~\ref{sec:reproducibility}),
-so that every run gives the same outcome.
-
-A fixed generator makes a test repeatable, not convincing: a test that passes
-for only one seed can hide a bug. Where the claim is statistical, such as an
-unbiased estimate or a coverage rate, assert it with bounds whose
-false-failure rate is known and very small, for example a deviation of
-several standard errors, so that the test would pass for other seeds as well.
-The bound is a constant in the sense of Subsection~\ref{sec:magic-numbers}.
-Never choose a seed because the test passes with it.
-
-
-
 \subsection{Make every result traceable to a version}
 \label{sec:traceability}
 
@@ -1143,6 +1317,7 @@ versions are traced through the changelog (Subsection~\ref{sec:stable-api}).
 
 % ==========================================================
 \section{Steps and their files}
+\label{sec:steps}
 % ==========================================================
 
 \subsection{Out of sight, out of date}
@@ -1226,6 +1401,7 @@ check the exit status of every program that a step calls.
 
 % ==========================================================
 \section{Environments and tests}
+\label{sec:environments}
 % ==========================================================
 
 \subsection{Pin what you run}
@@ -1271,7 +1447,7 @@ select, including an input that fails or is skipped where the workflow
 allows that (Subsection~\ref{sec:loud}). Check the outputs, not only that the
 run finished: compare them with known results, for example for simulated
 input, and check invariants such as the number of samples or the total of
-the counts (Subsection~\ref{sec:invariants}).
+the counts (\TestingRef{Test invariants, not only examples}).
 
 
 
@@ -1284,6 +1460,7 @@ the counts (Subsection~\ref{sec:invariants}).
 
 % ==========================================================
 \section{Structure}
+\label{sec:library-structure}
 % ==========================================================
 
 \subsection{Design modules around clear responsibilities}
@@ -1342,6 +1519,7 @@ The plotting library should be an optional dependency
 
 % ==========================================================
 \section{Interfaces}
+\label{sec:interfaces}
 % ==========================================================
 
 \subsection{Operate on data objects, not files}
@@ -1476,6 +1654,7 @@ of the same deferred computation, or apply it chunk by chunk.
 
 % ==========================================================
 \section{No side effects}
+\label{sec:side-effects}
 % ==========================================================
 
 \subsection{Do not touch global state}
@@ -1692,8 +1871,10 @@ iterative loop, and writes the results, often in parallel on a cluster.
     by writing routines for fixed hooks: the code is a framework, not a
     library (\hyperref[sec:library]{Library code and workflow code}).
   \item Testing is expensive, because a realistic run takes hours on many
-    processors. Tests need small, cheap configurations and invariants such
-    as conservation laws (Subsection~\ref{sec:invariants}).
+    processors. Tests need small, cheap configurations, invariants such as
+    conservation laws (\TestingRef{Test invariants, not only examples}), and
+    checks of the order of convergence (\TestingRef{Check the order of
+    convergence}).
   \item Input files often have hundreds of options whose defaults change
     results (Subsection~\ref{sec:numeric-defaults}), and building the code
     depends on the compilers and libraries of a computing center, which makes

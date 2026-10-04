@@ -14,3 +14,10 @@ on, in any programming language and scientific field. Research software
 stands on a ladder, and the principles are what it takes to climb it. Most are
 general software engineering principles, stated for a setting where the
 typical failure is not a crash but a plausible, wrong number.
+
+## [Testing Research Software](pdf/Testing_Research_Software.pdf)
+
+How to test research software: where the expected values of tests come from,
+how to write tests that catch a plausible, wrong number, and how to keep a
+test suite honest as the code changes. Short principles, meant for looking
+things up while working.
