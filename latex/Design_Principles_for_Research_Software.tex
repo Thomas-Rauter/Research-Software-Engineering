@@ -1220,9 +1220,19 @@ Keep assertions cheap (Subsection~\ref{sec:cost}), and do not assert what
 holds by construction or what validation already guarantees; mistakes of the
 caller belong to validation (Subsection~\ref{sec:validation}).
 
-A failed assertion means the package has a bug. It must raise, never warn,
-and its message should say so and ask for a report, rather than tell the user
-to change the call. Assertions must run in every configuration; where the
+A failed assertion means the package has a bug, so an assertion should fail
+on nothing else. An assertion on a floating-point invariant should have a
+tolerance that holds for every valid input, including ill-conditioned ones:
+an error that the conditioning of the problem explains is not a bug, and it
+is reported as Subsection~\ref{sec:convergence} requires, not asserted. A
+mistake of the caller that reaches an assertion is a bug too, in the
+validation, unless the caller has turned off the data checks that would have
+caught it (Subsection~\ref{sec:validation-cost}).
+
+A failed assertion must raise, never warn. Its message should say that the
+package has a bug and ask for a report, rather than tell the user to change
+the call; when the caller has turned off data checks, it should also name them
+as a possible cause. Assertions must run in every configuration; where the
 assertion mechanism of the host stack can be disabled, raise explicitly
 instead.
 
