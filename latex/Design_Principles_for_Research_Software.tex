@@ -504,6 +504,9 @@ states no principles of its own.
   \ref{sec:traceability} & \nameref{sec:traceability}
     & Expose the version, archive every release, and record the version and the
       parameters with every result. \\
+  \ref{sec:recipe} & \nameref{sec:recipe}
+    & Keep the code that produced every artifact, such as a figure or a table,
+      and treat what is edited by hand as source. \\
   \addlinespace[10pt]
   \GlancePart{part:workflow} \\*
   \addlinespace[4pt]
@@ -1385,6 +1388,68 @@ versions are traced through the changelog (Subsection~\ref{sec:stable-api}).
 
 
 
+\subsection{Keep the recipe, not just the cake}
+\label{sec:recipe}
+
+Every artifact should be kept together with its recipe, so that it can be
+made again, and made differently. An artifact is anything that a package
+ships or a result depends on that was produced rather than written, such as
+a figure in the documentation, a table of precomputed constants, a processed
+dataset, a mesh, a trained model, a container image, generated code, or a
+compiled binary. Its recipe is the code that produced it, such as a script,
+a notebook, or a build rule, together with the inputs that code read. If an
+artifact was generated, keep its recipe. If it was edited by hand, it is
+source: keep it under version control, in a format that can be edited, and
+never let a generator overwrite it.
+
+Reproducibility asks whether the same result can be obtained again
+(Subsection~\ref{sec:reproducibility}); this principle asks whether a
+different one can be made when it is needed. The two are independent. A
+container image without the file that built it, such as a Dockerfile or an
+Apptainer definition file, gives the same results for as long as it runs and
+can never be changed; a Dockerfile that installs whatever versions are
+current can be changed freely and reproduces nothing
+(Subsection~\ref{sec:pin}). In research software, the change that is needed
+is often a correction. When a bug is fixed, every artifact it touched has to
+be made again, and an artifact without its recipe keeps the old, wrong values
+and looks as valid as before (Subsection~\ref{sec:loud}). The same holds
+when a parameter range has to be extended, an input is corrected, or a
+figure in the documentation has to show what the current version computes.
+
+Some artifacts are best made by hand, such as a figure assembled from
+generated panels in a vector editor. That is fine if the hand-made part is
+kept as source: the editable file, not only the exported image. What fails
+is an artifact that is generated and then edited, such as a table that a
+script wrote and a person then corrected in a spreadsheet. Rerunning the
+script destroys the corrections, and not rerunning it keeps the errors that
+the script no longer makes. Put such corrections into source that the
+generator reads, such as a list of the samples excluded after inspection,
+and declare it as an input (Subsection~\ref{sec:declared-inputs}).
+
+Code that is itself an artifact follows the same rule. Do not edit generated
+code, such as bindings to a C library; change its generator or its input
+instead. A binary received from a collaborator, or built once on a machine
+that no longer exists, can be run but never fixed: keep its source and the
+instructions that build it. For a copy of another project's code that was
+changed for the package, record the upstream version and keep the changes as
+a patch, so that they can be applied again to a new release. A table of
+constants computed by a script, such as quadrature weights or calibration
+coefficients, is justified by that script: it is the derivation that
+Subsection~\ref{sec:magic-numbers} asks for, and without it the table can be
+neither checked nor extended.
+
+Keeping the recipe does not mean throwing away the cake. A container image
+archived for a publication is kept as it is, next to the file that built it,
+so that the result can be obtained again even when the recipe no longer
+builds (Subsection~\ref{sec:traceability}). Raw data are not artifacts but
+source: they were collected, not produced by the software, and are kept
+unchanged. To check that a recipe still works, delete the artifact and make
+it again from what is kept. Where the build does that on every change, as a
+documentation build can for its figures (\DocumentingRef{Docs as code}), a
+recipe cannot stop working unnoticed.
+
+
+
 % ==========================================================
 \part{Workflow code}
 \label{part:workflow}
@@ -1487,7 +1552,8 @@ check the exit status of every program that a step calls.
 Workflow code should run every step in an environment whose versions are
 pinned exactly: the language, the libraries, and every external tool. Record
 them in a lock file, in an environment file with exact versions, or in a
-container image identified by its digest rather than by a tag that can move.
+container image identified by its digest rather than by a tag that can move,
+together with the file that builds it (Subsection~\ref{sec:recipe}).
 
 The results of a workflow depend on the tools it calls as much as on its own
 code. A new release of a tool can change a default or fix a bug, and with it

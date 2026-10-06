@@ -669,8 +669,9 @@ code (Subsection~\ref{sec:flaky-tests}), and the outcome of a test run
 cannot be reproduced later.
 
 Keep test data small and in the repository. Prefer synthetic data generated
-in the test from a fixed seed, which documents how the data were made and
-keeps them next to the claim they test. Where real data matter, for example
+in the test from a fixed seed, which keeps them next to the claim they test
+and documents how they were made (\DesignRef{Keep the recipe, not just the
+cake}). Where real data matter, for example
 for a file format, use an excerpt small enough for the repository and
 licensed for redistribution. Confidential data, such as patient records,
 must not be part of a test suite: a repository is copied to every machine

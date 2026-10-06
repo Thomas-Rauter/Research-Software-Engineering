@@ -534,7 +534,10 @@ package, written in plain-text formats such as Markdown, reStructuredText,
 or Quarto, reviewed, built, and released with the code. Documentation kept
 elsewhere, such as in a wiki, a shared drive, or a slide deck, has no
 version, changes on its own schedule, and describes some version of the
-software, but not a stated one.
+software, but not a stated one. Figures that show what the software computes
+should be made by code kept with the documentation, preferably by its build,
+so that they show what the current version computes (\DesignRef{Keep the
+recipe, not just the cake}).
 
 A change of behavior and the change of its documentation belong in the same
 commit, and the review of a change checks both. When the code and the
