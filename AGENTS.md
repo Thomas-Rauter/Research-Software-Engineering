@@ -27,6 +27,13 @@ appendix of the other. Its core idea is that a test is only as good as its
 oracle, the source of its expected value. It is short and meant for looking
 things up while working, not for reading from cover to cover.
 
+The third document, *Types of Research Software Tests*, defines the terms of
+testing for the whole set: test, test suite, oracle, tolerance, and every
+type of test. Its core idea is that every test makes three choices, its
+scope (what runs), its inputs (what goes in), and its oracle (what the
+result is checked against), and takes one type from each. It describes and
+states no rules.
+
 This is a writing project, not a code project. Typical tasks are adding or
 revising a principle, finding a better title, checking the document for
 consistency, and tightening the prose.
@@ -35,8 +42,9 @@ consistency, and tightening the prose.
 
 - `latex/NAME.tex` is the source of a document and the source of truth. All
   edits go here, for example to
-  `latex/Design_Principles_for_Research_Software.tex` or
-  `latex/Testing_Research_Software.tex`.
+  `latex/Design_Principles_for_Research_Software.tex`,
+  `latex/Testing_Research_Software.tex`, or
+  `latex/Types_of_Research_Software_Tests.tex`.
 - `pdf/NAME.pdf` is built from it and committed. The website serves the PDFs
   from this directory.
 - `README.md` is the landing page of the website. For every document it gives
@@ -81,9 +89,8 @@ consistency, and tightening the prose.
 - The unnumbered front matter, "About this guide", says what the guide
   covers and what *Design Principles* covers instead. "Normative language and
   the ladder" adopts both from *Design Principles* without restating them,
-  and "Terminology" defines only the terms of testing (oracle, tolerance,
-  snapshot test, and so on); the other terms are used as defined in *Design
-  Principles*.
+  and "Terminology" adopts the terms of *Design Principles* and the terms of
+  testing from *Types of Research Software Tests*, without defining any.
 - "At a glance" follows on a page of its own, as in *Design Principles*:
   every principle with its number, its title, and a one-line rule.
 - Three numbered `\section`s, without `\part`s: "Where correctness comes
@@ -95,24 +102,65 @@ consistency, and tightening the prose.
 - The guide is prose only: no code examples in any language. Naming tools,
   such as pytest or Hypothesis, is fine.
 
-## The two documents
+## Structure of the types document
 
-- They form one set of guidelines. The testing guide uses the normative
-  language, the ladder, the terminology, and the priorities of *Design
-  Principles*, and its *must*s are part of the same floor.
+- The unnumbered front matter, "About this document", explains the three
+  choices of every test (scope, inputs, oracle), says that each test checks
+  one claim and that an entry point is tested by several tests with
+  different oracles, and states that the document has no rules. "How to read
+  a type" lists the fields, and "Terminology" defines test, test suite,
+  oracle, and tolerance for all three documents.
+- "At a glance" follows on a page of its own: every type with its number,
+  its title, and a one-line definition.
+- Three numbered sections, "Scope: what runs", "Inputs: what goes in", and
+  "Oracle: what the result is checked against". Each `\subsection` is one
+  type, titled with its plain name, such as "Unit test" or "Snapshot",
+  because readers look types up by name. The oracles start with the three
+  that do not show that a result is right: it runs, snapshot, and
+  reproducibility.
+- Each type is one `typecard` environment with the fields `\Definition`,
+  `\Catches`, `\Misses`, `\Cost`, `\PairsWith`, `\Example`, and `\See`,
+  always all seven and in this order. "Pairs with" names the types of the
+  other two sections that work with this one, and those that do not. "See"
+  cites the principles that state rules about the type.
+- The fourth section, "Tests by name", is a table of common names, such as
+  smoke test, regression test, and property-based test, with the scope, the
+  inputs, and the oracle that each usually combines and what the name adds.
+  A name that stands for a combination of types or for a purpose goes into
+  this table, not into a subsection of its own. Activities that are not
+  tests of results, such as mutation testing, code coverage, benchmarks, and
+  validation, are only pointed to.
+- The document describes; it uses no *must*, *should*, *prefer*, or *avoid*.
+  Where a type comes with a rule, the rule stays in *Design Principles* or
+  the testing guide, and the field "See" cites it.
+
+## The three documents
+
+- *Design Principles* and the testing guide form one set of guidelines. The
+  testing guide uses the normative language, the ladder, the terminology,
+  and the priorities of *Design Principles*, and its *must*s are part of the
+  same floor.
+- *Types of Research Software Tests* is the one place where the terms of
+  testing are defined: test, test suite, oracle, tolerance, and every type of
+  test. The other two documents use these terms with that meaning and do not
+  define them again; a new term of testing is added there.
 - The split: *Design Principles* says *that* code is tested and what the
   software itself must do, including checks the code makes on every run,
   such as validation and assertions. The testing guide says *how* tests are
   written and maintained. "Testing is not optional" and "Test the whole
   workflow on a small dataset" stay in *Design Principles*. Before adding a
   principle about testing, decide by this rule which document it belongs in.
-- DRY holds across both: each rule is stated in one document only, and the
-  other cites it.
-- A `\ref` cannot reach into the other PDF, so the documents cite each
-  other's principles by title: `\TestingRef{Title}` in *Design Principles*
-  and `\DesignRef{Title}` in the testing guide, defined in the customization
-  zone. The title is the reference, so renaming a principle means searching
-  the other document for the old title and updating it.
+  A sentence that says what someone must or should do belongs in one of
+  these two; a sentence that says what a type of test is, catches, or misses
+  belongs in the types document.
+- DRY holds across all three: each rule is stated in one document only, and
+  the others cite it.
+- A `\ref` cannot reach into another PDF, so the documents cite each other's
+  principles by title: `\TestingRef{Title}` in *Design Principles*,
+  `\DesignRef{Title}` in the testing guide, and both in the types document,
+  defined in the customization zone. The title is the reference, so renaming
+  a principle means searching the other two documents for the old title and
+  updating it.
 
 ## Writing a principle
 
@@ -167,6 +215,8 @@ When proposing a title, offer several options.
   what is shipped, not a synonym for a library. Avoid calling the two kinds
   of code "roles", because "the role of the software" in "Pay as you grow"
   means something else.
+- Use the terms of testing as *Types of Research Software Tests* defines
+  them, such as *oracle*, *unit test*, and *snapshot test*.
 
 ### Consistency across the document
 
@@ -180,11 +230,12 @@ When proposing a title, offer several options.
   Keep existing labels stable, and make sure every `\ref` still resolves after an
   edit. The front-matter subsections are unnumbered, so a `\ref` to them
   prints an empty number; refer to them by name instead.
-- Both documents have an "At a glance" table. Its rows take the number and
-  the title of each principle from its label (`\ref`, `\nameref`), and the
-  macros `\GlancePart` and `\GlanceSection` write the header rows. The
-  one-line rule is written by hand: when you add, move, or change a
-  principle, add or update its row, and keep the rule true to the principle,
+- All three documents have an "At a glance" table. Its rows take the number
+  and the title of each principle or type from its label (`\ref`,
+  `\nameref`), and the macros `\GlancePart` and `\GlanceSection` write the
+  header rows. The one-line rule, or in the types document the one-line
+  definition, is written by hand: when you add, move, or change a principle
+  or a type, add or update its row, and keep the rule true to the principle,
   including its *must* or *should*.
 - The ranking in "Get your priorities right" (correctness, clarity,
   testability, maintainability, performance, features) resolves conflicts
@@ -200,7 +251,7 @@ When proposing a title, offer several options.
   piece of software that anyone besides its author uses.
 - After editing a principle, check the principles that refer to it, or that
   it refers to, for contradictions, including citations in the other
-  document.
+  documents.
 
 ## Working on the LaTeX
 

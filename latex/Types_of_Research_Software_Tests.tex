@@ -1,0 +1,985 @@
+% ==========================================================
+% STANDARDIZED PREAMBLE (STATIC CORE) — DO NOT EDIT THIS PART
+% ==========================================================
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+  \usepackage[T1]{fontenc}
+  \usepackage{stix2}
+\else
+  \usepackage{fontspec}
+  \usepackage{unicode-math}
+  \setmainfont{STIX Two Text}
+  \setmathfont{STIX Two Math}
+\fi
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage{microtype}
+\usepackage{enumitem}
+
+\usepackage{amsmath, amssymb}
+
+\usepackage{tocloft}
+\setlength{\cftbeforesecskip}{2pt}
+\setlength{\cftbeforesubsecskip}{1pt}
+
+\widowpenalty=10000
+\clubpenalty=10000
+
+\usepackage{xcolor}
+\definecolor{myblue}{RGB}{0, 51, 153}
+
+\usepackage{sectsty}
+\partfont{\color{myblue}}
+\chapterfont{\color{myblue}}
+\sectionfont{\color{myblue}}
+\subsectionfont{\color{myblue}}
+\subsubsectionfont{\color{myblue}}
+
+\usepackage{hyperref}
+
+\renewcommand{\cftsecfont}{\bfseries\color{myblue}}
+\renewcommand{\cftsubsecfont}{\color{myblue}}
+\renewcommand{\cftsubsubsecfont}{\color{myblue}}
+\renewcommand{\cftsecpagefont}{\bfseries}
+\renewcommand{\cftsubsecpagefont}{}
+\renewcommand{\cftsubsubsecpagefont}{}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=myblue,
+  citecolor=myblue,
+  urlcolor=myblue
+}
+
+\usepackage{titlesec}
+\titlespacing{\section}{0pt}{12pt}{6pt}
+\titlespacing{\subsection}{0pt}{10pt}{5pt}
+\titlespacing*{\section}{0pt}{2.5ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+\titlespacing*{\subsection}{0pt}{2ex plus 0.8ex minus .2ex}{1.2ex plus .2ex}
+\titlespacing*{\subsubsection}{0pt}{1.8ex plus 0.6ex minus .2ex}{1ex plus .2ex}
+
+\makeatletter
+\newcommand{\StartBlueDoc}[3][]{%
+  \title{\vspace{-2em}\textbf{#2}%
+    \if\relax\detokenize{#3}\relax\else\\[2pt]{\large #3}\fi
+    \vspace{+0.6em}}
+  \author{#1}
+  \date{\vspace{-0.6em}\today}
+  \begin{document}
+  \maketitle
+  \tableofcontents
+  \vspace{1em}\hrule\vspace{1em}
+}
+\makeatother
+
+% ==========================================================
+% CUSTOMIZATION ZONE
+% ==========================================================
+
+\newcommand{\DocAuthor}{}
+\newcommand{\DocTitle}{Types of Research Software Tests}
+\newcommand{\DocSubtitle}{}
+
+\setcounter{tocdepth}{2}
+
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xltabular}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{T}{>{\raggedright\arraybackslash}p{0.26\textwidth}}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1\textwidth}}
+
+% Header rows of the table "At a glance": a section, with its number and its
+% title.
+\newcommand{\GlanceSection}[1]{%
+  \multicolumn{3}{@{}l}{\textbf{\ref{#1}\quad\nameref{#1}}}}
+
+% The card that describes a type. Every type has the same fields, in this
+% order: \Definition, \Catches, \Misses, \Cost, \PairsWith, \Example, \See.
+\newenvironment{typecard}
+  {\begin{description}[style=multiline, leftmargin=6.5em,
+     font=\normalfont\bfseries, topsep=2pt, itemsep=2pt,
+     parsep=0pt]}
+  {\end{description}}
+\newcommand{\Definition}{\item[Definition]}
+\newcommand{\Catches}{\item[Catches]}
+\newcommand{\Misses}{\item[Misses]}
+\newcommand{\Cost}{\item[Cost]}
+\newcommand{\PairsWith}{\item[Pairs with]}
+\newcommand{\Example}{\item[Example]}
+\newcommand{\See}{\item[See]}
+
+% Cite a principle of the other documents by its title. A \ref cannot
+% reach into another PDF, so the title is the reference.
+\newcommand{\DesignRef}[1]{\emph{Design Principles}, ``#1''}
+\newcommand{\TestingRef}[1]{\emph{Testing Research Software}, ``#1''}
+
+% ==================
+% Start the document
+% ==================
+\StartBlueDoc[\DocAuthor]{\DocTitle}{\DocSubtitle}
+
+
+
+% ==========================================================
+\section*{About this document}
+\phantomsection
+\addcontentsline{toc}{section}{About this document}
+% ==========================================================
+
+This document describes the types of tests for research software: what each
+type is, what it catches, and what it misses. It belongs to the same set as
+\emph{Design Principles for Research Software}, cited below as \emph{Design
+Principles}, and \emph{Testing Research Software}, and it is the one place
+where the set defines the terms of testing. The other two documents use them
+with the meaning given here.
+
+Every test makes three choices: its scope, what runs
+(Section~\ref{sec:scope}); its inputs, what goes in
+(Section~\ref{sec:inputs}); and its oracle, what the result is checked
+against (Section~\ref{sec:oracles}). Each subsection of these three sections
+describes one type, and a test takes one type from each section. A
+property-based test, for example, is usually a unit test on generated inputs
+with an invariant as its oracle. The three choices are largely independent:
+a unit test can use any oracle, and most oracles can check a single function
+as well as a whole workflow. Some combinations do not work, though, such as
+generated inputs with a known answer, because an arbitrary input has none;
+the field ``Pairs with'' of each type says which.
+
+A test checks one claim, and each oracle sees some errors and is blind to
+others. One test, however well chosen, therefore checks only one aspect of
+an entry point, and an entry point is tested by several tests with different
+oracles. How many, and which, is the subject of \TestingRef{A test is only as
+good as its oracle}.
+
+Many tests are known by a name that is not a type of its own, such as smoke
+test or regression test. Such a name stands for a combination of types, or
+for the purpose a test serves; Section~\ref{sec:by-name} lists common ones.
+
+This document states no rules. Where a type comes with a requirement or a
+default, such as the tolerance of a comparison of floating-point numbers,
+its field ``See'' cites the principle that states it.
+
+
+
+\subsection*{How to read a type}
+\phantomsection
+\addcontentsline{toc}{subsection}{How to read a type}
+\label{sec:fields}
+
+Every type is described by the same fields, in the same order:
+
+\begin{description}
+  \item[Definition] What the type is.
+  \item[Catches] The errors it finds.
+  \item[Misses] The errors it cannot find, and so the reason to combine it
+    with other types.
+  \item[Cost] The effort to write it, the time to run it, and the work to
+    keep it up to date.
+  \item[Pairs with] The types of the other two sections that it works with,
+    and those it does not.
+  \item[Example] One test of the type, from a scientific field.
+  \item[See] The principles that state rules about the type, and related
+    types.
+\end{description}
+
+
+
+\subsection*{Terminology}
+\phantomsection
+\addcontentsline{toc}{subsection}{Terminology}
+\label{sec:terminology}
+
+The terms defined in \emph{Design Principles}, such as package, library code,
+workflow code, entry point, host stack, and caller, carry the same meaning
+here. The terms of testing are defined here, for all three documents:
+
+\begin{description}
+  \item[Test] Code that runs part of the package on an input and checks the
+    result automatically, with the outcome pass or fail.
+  \item[Test suite] All tests of a package, run together by the test runner
+    of the host stack, such as testthat in R or pytest in Python.
+  \item[Oracle] The source of the expected value that a test compares a
+    result with, or of the property that it checks
+    (Section~\ref{sec:oracles}).
+  \item[Tolerance] The largest difference between a result and its expected
+    value that a test accepts.
+\end{description}
+
+Each type, such as unit test, edge case, or snapshot, is defined in its own
+subsection of Sections~\ref{sec:scope} to~\ref{sec:oracles}, and the common
+names of tests, such as smoke test, in Section~\ref{sec:by-name}.
+
+
+
+% The overview gets a page of its own, so that it can be printed.
+\clearpage
+% ==========================================================
+\section*{At a glance}
+\phantomsection
+\addcontentsline{toc}{section}{At a glance}
+% ==========================================================
+
+Every type of this document in one line. The number and the title link to
+the type. A test takes one type from each of the three sections.
+
+{\small
+\begin{tabularx}{\textwidth}{@{}lTL@{}}
+  \toprule
+  \GlanceSection{sec:scope} \\
+  \midrule
+  \ref{sec:unit} & \nameref{sec:unit}
+    & One function, or a few that work closely together, called directly. \\
+  \ref{sec:integration} & \nameref{sec:integration}
+    & Several parts run together, to check that they fit. \\
+  \ref{sec:end-to-end} & \nameref{sec:end-to-end}
+    & An entry point run the way its caller runs it, from start to
+      finish. \\
+  \addlinespace
+  \GlanceSection{sec:inputs} \\
+  \midrule
+  \ref{sec:examples} & \nameref{sec:examples}
+    & Small, typical inputs that the author of the test writes into it. \\
+  \ref{sec:edges} & \nameref{sec:edges}
+    & Empty, single, tied, missing, extreme, and nearly singular inputs. \\
+  \ref{sec:generated} & \nameref{sec:generated}
+    & Many inputs, produced by a program from the documented input
+      domain. \\
+  \ref{sec:simulated} & \nameref{sec:simulated}
+    & Data drawn from the model, with parameters known exactly. \\
+  \ref{sec:real-data} & \nameref{sec:real-data}
+    & Data from a real measurement or collection, or an excerpt of it. \\
+  \addlinespace
+  \GlanceSection{sec:oracles} \\
+  \midrule
+  \ref{sec:it-runs} & \nameref{sec:it-runs}
+    & The code finishes without an error; the result is not checked. \\
+  \ref{sec:snapshot} & \nameref{sec:snapshot}
+    & The result agrees with a stored output of an earlier run. \\
+  \ref{sec:reproducibility} & \nameref{sec:reproducibility}
+    & The result agrees with that of another run of the same code. \\
+  \ref{sec:known-answer} & \nameref{sec:known-answer}
+    & The result agrees with an exact value obtained without the code. \\
+  \ref{sec:invariant} & \nameref{sec:invariant}
+    & The result has a property that every correct result has. \\
+  \ref{sec:metamorphic} & \nameref{sec:metamorphic}
+    & A known change of the input changes the result in a known way. \\
+  \ref{sec:round-trip} & \nameref{sec:round-trip}
+    & An operation followed by its inverse returns the input. \\
+  \ref{sec:second-opinion} & \nameref{sec:second-opinion}
+    & The result agrees with that of an independent implementation. \\
+  \ref{sec:recovery} & \nameref{sec:recovery}
+    & The method recovers the parameters behind simulated data, with honest
+      uncertainty. \\
+  \ref{sec:ground-truth} & \nameref{sec:ground-truth}
+    & The result agrees with a truth about real data that was established
+      without the method. \\
+  \ref{sec:convergence} & \nameref{sec:convergence}
+    & The error falls with the resolution at the rate of the method. \\
+  \bottomrule
+\end{tabularx}}
+
+
+
+% ==========================================================
+\section{Scope: what runs}
+\label{sec:scope}
+% ==========================================================
+
+The scope of a test is the part of the package that it runs. The smaller the
+scope, the faster the test and the more precisely a failure points to its
+cause; the larger the scope, the more of the connections between the parts
+the test checks.
+
+\subsection{Unit test}
+\label{sec:unit}
+
+\begin{typecard}
+  \Definition A test that calls one function, or a few functions that work
+    closely together, directly and apart from the rest of the package.
+  \Catches Errors in the logic of that function, such as a wrong formula,
+    sign, index, or convention. A failing unit test points to the function
+    that broke.
+  \Misses Errors in how the parts fit together, such as a result passed on in
+    the wrong units or order, a file that a later step cannot read, or an
+    option that never reaches the function.
+  \Cost The lowest of the three scopes: on a tiny input, a unit test
+    finishes in a fraction of a second, so hundreds of them run in minutes.
+    It needs code split into functions that can be called on their own.
+  \PairsWith Every type of input and of oracle. Hand-picked examples
+    (\ref{sec:examples}) with known answers (\ref{sec:known-answer}) make the
+    classic unit test; generated inputs (\ref{sec:generated}) with
+    invariants (\ref{sec:invariant}) make a property-based test.
+  \Example The log-likelihood of three observations under a normal
+    distribution, compared with the value worked out by hand.
+  \See \TestingRef{Many small tests, few big ones}.
+\end{typecard}
+
+
+
+\subsection{Integration test}
+\label{sec:integration}
+
+\begin{typecard}
+  \Definition A test that runs several parts together, to check that they
+    fit: the result of one function passed to the next, a file written by one
+    step and read by another, or a call into an external library, such as a
+    solver or a reader of a file format. Its scope lies between that of a
+    unit test and that of an end-to-end test.
+  \Catches Mismatches at the interfaces, such as units or axis orders that
+    differ between the parts, identifiers lost on the way, and assumptions
+    about a dependency that do not hold, such as the meaning of its tolerance
+    argument.
+  \Misses Errors inside a part that the combination happens to hide, and
+    errors in the configuration and the glue of a whole entry point.
+  \Cost Higher than for a unit test: it runs longer, it needs inputs that
+    suit every part, and a failure points to several parts at once.
+  \PairsWith Hand-picked examples (\ref{sec:examples}) and simulated data
+    (\ref{sec:simulated}); invariants (\ref{sec:invariant}), such as counts
+    and identifiers that survive each interface; round trips
+    (\ref{sec:round-trip}) through a file format.
+  \Example The peaks found by a peak detector, passed to the function that
+    fits them, keep the identifiers and the units of their detection.
+  \See \DesignRef{Derive abstractions from applications, not applications
+    from abstractions}, on keeping the driving applications as integration
+    tests.
+\end{typecard}
+
+
+
+\subsection{End-to-end test}
+\label{sec:end-to-end}
+
+\begin{typecard}
+  \Definition A test that runs an entry point the way its caller runs it,
+    from start to finish: a workflow or a command, from its input files and
+    configuration to its outputs, or, for library code, the calls of a
+    complete analysis, such as a documented example.
+  \Catches Steps that do not fit together, files that a step cannot find or
+    read, options of the configuration that never reach their step, and
+    errors in code that no unit test runs.
+  \Misses Where an error is: a failure says that something broke, not what.
+    Also every input and branch that the small dataset does not reach.
+  \Cost Minutes rather than seconds, and a small dataset that reaches every
+    step and every branch of the configuration.
+  \PairsWith Simulated data (\ref{sec:simulated}) with parameter recovery
+    (\ref{sec:recovery}) as its oracle; invariants (\ref{sec:invariant}),
+    such as the number of samples and the total of the counts; snapshots
+    (\ref{sec:snapshot}) of the outputs. With ``it runs''
+    (\ref{sec:it-runs}) as its only oracle, it is a smoke test
+    (Section~\ref{sec:by-name}).
+  \Example A workflow run on six simulated samples: every sample appears in
+    the final table, and the estimated fold changes recover the simulated
+    ones.
+  \See \DesignRef{Test the whole workflow on a small dataset};
+    \TestingRef{Many small tests, few big ones}.
+\end{typecard}
+
+
+
+% ==========================================================
+\section{Inputs: what goes in}
+\label{sec:inputs}
+% ==========================================================
+
+The inputs decide which part of the input space a test explores. Inputs
+that a person chooses are few and go where the person looks, which is rarely
+where the bugs are. Inputs that a program generates reach much more of the
+space, but an arbitrary input comes without a known answer, so the inputs
+also decide which oracles a test can use.
+
+\subsection{Hand-picked examples}
+\label{sec:examples}
+
+\begin{typecard}
+  \Definition Small inputs that the author of a test chooses and writes into
+    it, usually typical ones: a few observations, a short sequence, a
+    three-by-three matrix.
+  \Catches Errors on typical inputs, which are the inputs that most users
+    bring. A small input makes the claim of the test readable and its
+    expected value easy to derive.
+  \Misses Everything the author did not think of. People choose inputs that
+    they expect to work, so hand-picked examples rarely reach the inputs
+    where code breaks.
+  \Cost Low to write and to run.
+  \PairsWith Known answers (\ref{sec:known-answer}) worked out by hand;
+    every scope, and most other oracles.
+  \Example A two-by-two table of counts, small enough that the p-value of
+    Fisher's exact test can be computed by hand.
+  \See Edge cases (\ref{sec:edges}) and generated inputs
+    (\ref{sec:generated}), which reach what hand-picked examples miss.
+\end{typecard}
+
+
+
+\subsection{Edge cases}
+\label{sec:edges}
+
+\begin{typecard}
+  \Definition Inputs at the edges of the input space: in size, such as an
+    empty input and a single element; in value, such as zeros, ties, and the
+    boundaries of a parameter's range; missing and special values, such as
+    NA, NaN, and infinities; extreme magnitudes and nearly singular inputs;
+    and unusual structure, such as unsorted input.
+  \Catches Crashes, silent NaNs, off-by-one errors, divisions by zero, and
+    wrong handling of missing values: code breaks at the edges, and typical
+    data never go there. Writing the test also reveals edges where the
+    behavior is not documented.
+  \Misses Errors in the interior of the input space, on typical data.
+  \Cost Low: the edges of most functions follow from a short list, and each
+    test is fast.
+  \PairsWith Known answers (\ref{sec:known-answer}), including the
+    documented error or warning as the expected outcome; invariants
+    (\ref{sec:invariant}). Generated inputs (\ref{sec:generated}) search the
+    edges automatically.
+  \Example The correlation of a variable with zero variance, which is
+    undefined: the result is the documented one, such as NA, or the
+    documented error.
+  \See \TestingRef{Most bugs live at the edges}; \DesignRef{Raise, warn, or
+    stay silent}; \DesignRef{Mind the gap, don't fill it}.
+\end{typecard}
+
+
+
+\subsection{Generated inputs}
+\label{sec:generated}
+
+\begin{typecard}
+  \Definition Many inputs, produced by a program from a description of the
+    input domain: random draws, systematic grids, or the inputs of a
+    property-based testing framework, which also searches the edges and
+    reduces a failing input to a minimal one.
+  \Catches Failures on inputs that no one thought of, in rare regions of the
+    input domain and in unusual combinations of values.
+  \Misses Errors that the oracle cannot see, because an arbitrary input has
+    no known answer, and inputs outside the domain that the generator
+    describes.
+  \Cost Moderate: describing the input domain and finding an oracle that
+    holds for every input take thought, and a test runs the code hundreds of
+    times.
+  \PairsWith Invariants (\ref{sec:invariant}), metamorphic relations
+    (\ref{sec:metamorphic}), round trips (\ref{sec:round-trip}), and second
+    opinions (\ref{sec:second-opinion}), which need no known answer; ``it
+    runs'' (\ref{sec:it-runs}), in a fuzz test. Known answers
+    (\ref{sec:known-answer}) only where a formula gives the answer for every
+    input.
+  \Example Data frames of random size and content, generated by a
+    property-based testing framework, on which reordering the rows leaves an
+    estimate unchanged.
+  \See \TestingRef{Let the computer pick the inputs}; \TestingRef{Flaky
+    tests cry wolf}, on randomness in tests.
+\end{typecard}
+
+
+
+\subsection{Simulated data}
+\label{sec:simulated}
+
+\begin{typecard}
+  \Definition Data drawn from the model that the method assumes, with
+    parameters chosen by the test, so that the truth behind the data is
+    known exactly. Unlike generated inputs, simulated data look like the
+    data of an application, in size and in structure.
+  \Catches Errors of the whole method on data of realistic size and
+    structure, such as bias and standard errors that are too small.
+  \Misses Failures on data that depart from the model, such as outliers,
+    artifacts, and the quirks of real files, and every error that the
+    simulator shares with the method, such as the same wrong
+    parameterization.
+  \Cost Moderate to high: the simulator is written from the definition of
+    the model, apart from the code of the method, and studies over many
+    simulated datasets are slow.
+  \PairsWith Parameter recovery (\ref{sec:recovery}), which needs it;
+    invariants (\ref{sec:invariant}); end-to-end tests
+    (\ref{sec:end-to-end}) of workflows, whose small dataset it can provide
+    with a known result.
+  \Example Counts for a few hundred genes, drawn from a negative binomial
+    distribution with a known mean and dispersion for each gene.
+  \See \TestingRef{Plant the answer, then find it}.
+\end{typecard}
+
+
+
+\subsection{Real data}
+\label{sec:real-data}
+
+\begin{typecard}
+  \Definition Data from a real measurement, experiment, or collection, or an
+    excerpt of it small enough for the repository.
+  \Catches What simulated data leave out: quirks of file formats, codes for
+    missing values, unexpected identifiers, outliers, artifacts of
+    instruments, and departures from the assumptions of the model.
+  \Misses Whether the result is right, unless the data come with a known
+    answer or a ground truth. Without one, a test on real data shows only
+    that the code runs, or that its result has not changed. Where there is a
+    truth, it is often uncertain and covers only part of the data.
+  \Cost Finding data that are small, licensed for redistribution, and not
+    confidential. Larger datasets make slow tests.
+  \PairsWith Ground truth (\ref{sec:ground-truth}), where the data have one;
+    known answers (\ref{sec:known-answer}), where a result of the
+    computation is certified, as for the Longley data among the Statistical
+    Reference Datasets of NIST; otherwise ``it runs'' (\ref{sec:it-runs}),
+    snapshots (\ref{sec:snapshot}), invariants (\ref{sec:invariant}), and
+    metamorphic relations (\ref{sec:metamorphic}). With a known signal
+    planted into them, real data serve parameter recovery
+    (\ref{sec:recovery}) as well.
+  \Example A few hundred lines of a public file of weather station records,
+    with its codes for missing values and its irregular timestamps, to test
+    the reader of the format.
+  \See \TestingRef{Every test stands on its own}, on licenses and
+    confidential data.
+\end{typecard}
+
+
+
+% ==========================================================
+\section{Oracle: what the result is checked against}
+\label{sec:oracles}
+% ==========================================================
+
+The oracle decides what a passing test shows. The first three oracles check
+only that the code runs, or compare the code with itself: they show that a
+result exists or has not changed, not that it is right. The others check the
+result against something independent of the code under test, and each sees a
+different kind of error. \TestingRef{A test is only as good as its oracle}
+lists strong oracles for common kinds of code.
+
+\subsection{It runs}
+\label{sec:it-runs}
+
+\begin{typecard}
+  \Definition The test passes if the code finishes without an error. Its
+    result is not checked, or only its form, such as the number of output
+    files or the shape of an array.
+  \Catches Crashes, missing dependencies, broken installations, and steps
+    that do not fit together because a file is missing or has the wrong
+    format.
+  \Misses Every wrong result that does not crash, which is the typical
+    failure of research software: the plausible, wrong number.
+  \Cost The lowest of all oracles.
+  \PairsWith End-to-end tests (\ref{sec:end-to-end}) on a small hand-picked
+    example, as a smoke test, and generated inputs (\ref{sec:generated}), as
+    a fuzz test (Section~\ref{sec:by-name}). It adds little to a unit test,
+    whose result is cheap to check.
+  \Example A workflow run on a small dataset finishes and writes every output
+    file it promises.
+  \See \DesignRef{Test the whole workflow on a small dataset}, which asks for
+    more than this oracle: it requires checking the outputs, not only that
+    the run finished.
+\end{typecard}
+
+
+
+\subsection{Snapshot}
+\label{sec:snapshot}
+
+\begin{typecard}
+  \Definition The result is compared with a reference output stored from an
+    earlier run of the same code. A test with this oracle is a snapshot
+    test.
+  \Catches Silent changes, such as numbers that move after a refactoring, an
+    update of a dependency, or a new compiler. For a large output, such as a
+    table, a file, or a figure, it is often the only practical test.
+  \Misses Whether the result is right. A snapshot shows only that the result
+    has not changed, and a snapshot of a wrong result protects the error.
+  \Cost Low to create. Every intended change of the result needs a decision
+    and an update of the reference output, and a comparison bit for bit
+    breaks on every new platform.
+  \PairsWith Every scope; fixed inputs, such as hand-picked examples
+    (\ref{sec:examples}) and real data (\ref{sec:real-data}). It shows more
+    when the reference output was checked against another oracle before it
+    was stored.
+  \Example The table of model estimates for a reference dataset, compared
+    within a tolerance with the table stored at the last release.
+  \See \TestingRef{Unchanged is not correct}; \TestingRef{Compare floats
+    with tolerance}.
+\end{typecard}
+
+
+
+\subsection{Reproducibility}
+\label{sec:reproducibility}
+
+\begin{typecard}
+  \Definition The result is compared with that of another run of the same
+    code on the same input: a run with the same seed, with another number of
+    threads or processes, on another platform, or with other versions of the
+    dependencies.
+  \Catches Hidden nondeterminism, such as an unset seed, a race condition,
+    uninitialized memory, or a dependence on global state or on the order in
+    which files are listed; and results that change across platforms or
+    versions of the dependencies by more than the tolerance.
+  \Misses Every error that is the same in each run: a wrong result,
+    reproduced, is still wrong.
+  \Cost Low: the code runs twice. A comparison across platforms needs
+    automatic test runs on each of them.
+  \PairsWith Every scope and every type of input; it matters most for
+    stochastic and parallel code.
+  \Example A Monte Carlo simulation run twice with the same seed, then on one
+    and on eight threads, with the results compared within the tolerance
+    that defines reproducibility.
+  \See \DesignRef{Once is luck, twice is science}; \TestingRef{Flaky tests
+    cry wolf}.
+\end{typecard}
+
+
+
+\subsection{Known answer}
+\label{sec:known-answer}
+
+\begin{typecard}
+  \Definition An exact result for a particular input, obtained without the
+    code under test: an analytic solution or a limiting case, a tiny case
+    worked out by hand or with computer algebra, a certified reference
+    value, or a published value.
+  \Catches Wrong formulas, constants, signs, and conventions, on the inputs
+    where the answer is known.
+  \Misses Everything away from those inputs. Known answers exist mostly for
+    small or simple inputs, the easy corner of the input space. A reference
+    that uses another convention, such as a variance divided by $n$ rather
+    than $n-1$, raises false alarms.
+  \Cost Low when the answer is in a table, higher when it has to be derived.
+  \PairsWith Hand-picked examples (\ref{sec:examples}) and edge cases
+    (\ref{sec:edges}); real data (\ref{sec:real-data}) with certified
+    results; every scope. Generated inputs (\ref{sec:generated}) only where
+    a formula gives the answer for every input.
+  \Example The sample variance of 1, 2, 3, and 4, which is $5/3$ with the
+    divisor $n-1$ and $5/4$ with the divisor $n$.
+  \See \TestingRef{Know the answer before you ask}; \DesignRef{No magic
+    numbers}.
+\end{typecard}
+
+
+
+\subsection{Invariant}
+\label{sec:invariant}
+
+\begin{typecard}
+  \Definition A property that every correct result has, whatever the input,
+    such as a conservation law, a normalization, a bound, a symmetry, or a
+    consistency relation.
+  \Catches Errors that break the structure of a result: probabilities that
+    do not sum to one, a negative variance, mass that is lost, a distance
+    matrix that is not symmetric. It needs no known answer, so it can be
+    checked on any input.
+  \Misses A wrong result that still has the property: probabilities that sum
+    to one can still be the wrong probabilities.
+  \Cost Low once the property is known, and fast to check.
+  \PairsWith Generated inputs (\ref{sec:generated}), as a property-based
+    test; simulated (\ref{sec:simulated}) and real data
+    (\ref{sec:real-data}); end-to-end tests (\ref{sec:end-to-end}), as counts
+    and totals that every step preserves.
+  \Example In a simulation of a closed system, the total energy stays
+    constant, within the error of the integrator, over every time step.
+  \See \TestingRef{Test invariants, not only examples}; \DesignRef{Wear belt
+    and braces}, on checking the same invariants on every run.
+\end{typecard}
+
+
+
+\subsection{Metamorphic relation}
+\label{sec:metamorphic}
+
+\begin{typecard}
+  \Definition A relation between the results for two related inputs: the
+    input is changed in a way whose effect the method determines, and the
+    result changes accordingly. Examples are reordering, rescaling,
+    duplicating, and splitting the data, and monotonicity in a parameter.
+  \Catches Errors that leave each single result plausible, such as swapped
+    axes, identifiers misaligned after a sort, a unit converted twice, or a
+    result that depends on the order of the rows.
+  \Misses Errors that respect the relation: a constant bias survives every
+    reordering.
+  \Cost Moderate: finding relations takes knowledge of the method, and the
+    code runs twice. A relation that holds only approximately, for example
+    because reordering changes the rounding of a sum, needs a tolerance of
+    its own.
+  \PairsWith Generated inputs (\ref{sec:generated}), simulated data
+    (\ref{sec:simulated}), and real data (\ref{sec:real-data}), because it
+    needs no known answer; every scope.
+  \Example The coordinates of a set of points, converted from meters to
+    kilometers: their estimated spread falls by a factor of 1000, and
+    permuting the points leaves it unchanged.
+  \See \TestingRef{Change the input, predict the output}.
+\end{typecard}
+
+
+
+\subsection{Round trip}
+\label{sec:round-trip}
+
+\begin{typecard}
+  \Definition An operation followed by its inverse returns the original
+    input: a file written and read back, a transform and its inverse, a
+    unit converted and converted back, a value encoded and decoded. It is a
+    special metamorphic relation (\ref{sec:metamorphic}).
+  \Catches Information lost on the way, such as precision, units,
+    identifiers, or missing values; wrong encodings; and axes swapped in one
+    of the two directions.
+  \Misses Errors that the two directions share and that cancel: a transform
+    with the wrong normalization returns its input perfectly if its inverse
+    has the matching error.
+  \Cost Low where both directions exist, and fast.
+  \PairsWith Generated inputs (\ref{sec:generated}) and edge cases
+    (\ref{sec:edges}), such as empty tables and missing values; integration
+    tests (\ref{sec:integration}) across a file format; real data
+    (\ref{sec:real-data}) in that format.
+  \Example A table with missing values, units, and sample identifiers,
+    written to the package's file format, read back, and compared with the
+    original.
+  \See \DesignRef{Nothing lost in translation}.
+\end{typecard}
+
+
+
+\subsection{Second opinion}
+\label{sec:second-opinion}
+
+\begin{typecard}
+  \Definition The result is compared with that of an independent
+    implementation of the same method: a naive one written for the test,
+    such as a plain loop instead of vectorized code, a dense matrix instead
+    of a sparse one, or a direct sum instead of a fast transform; or an
+    established package, possibly in another language.
+  \Catches Errors of optimized code, such as wrong indices in vectorized or
+    sparse code and approximations of fast algorithms that go wrong, on every
+    input where the two implementations disagree.
+  \Misses Errors that both implementations share, because they come from the
+    same derivation, the same paper, or the same person. A disagreement shows
+    that one of the two is wrong, not which.
+  \Cost A naive implementation is quick to write but slow, so it works on
+    small inputs only. An established package adds a test dependency, and a
+    new release of it can change its numbers.
+  \PairsWith Generated inputs (\ref{sec:generated}), because it provides an
+    expected value for every input; hand-picked examples
+    (\ref{sec:examples}); unit tests (\ref{sec:unit}).
+  \Example The product of two small random sparse matrices, compared with
+    the product of the same matrices stored as dense ones.
+  \See \TestingRef{Get a second opinion}.
+\end{typecard}
+
+
+
+\subsection{Parameter recovery}
+\label{sec:recovery}
+
+\begin{typecard}
+  \Definition Data are simulated from the model with known parameters, the
+    method is applied to them, and the test checks that it recovers the
+    parameters with honest uncertainty: over many simulated datasets, the
+    estimates scatter as much as the reported standard errors say, and the
+    intervals contain the true values at their nominal rate, their coverage.
+  \Catches Bias, standard errors and intervals that are too narrow, tests
+    that reject too often under the null hypothesis, and failures in hard
+    cases, such as small samples, parameters at the boundary of their range,
+    and weak signals.
+  \Misses Errors that the simulator shares with the method, and failures on
+    data that depart from the model.
+  \Cost High: an independent simulator, bounds derived from the sampling
+    error, and many replicates, which make studies of coverage slow.
+  \PairsWith Simulated data (\ref{sec:simulated}), which it needs, or real
+    data (\ref{sec:real-data}) with a planted signal; integration
+    (\ref{sec:integration}) and end-to-end tests (\ref{sec:end-to-end}).
+  \Example A thousand datasets simulated from a mixed model with known
+    variance components: the 95\% intervals contain the true values in about
+    95\% of them, within the sampling error of a thousand replicates.
+  \See \TestingRef{Plant the answer, then find it}; \TestingRef{Flaky tests
+    cry wolf}, on bounds for statistical claims.
+\end{typecard}
+
+
+
+\subsection{Ground truth}
+\label{sec:ground-truth}
+
+\begin{typecard}
+  \Definition The result is compared with a truth about real data that was
+    established without the method: by the design of an experiment, by an
+    independent measurement, or by expert annotation. Examples are truth
+    sets for variant calling, spike-in controls of known concentration, mock
+    communities of known composition, imaging phantoms, and annotated images.
+    The comparison is usually a summary, such as a sensitivity or an error
+    rate within a bound. A certified result of a computation is a known
+    answer (\ref{sec:known-answer}) instead: it says what the computation
+    gives, not what is true.
+  \Catches Failures that only real data show, such as those caused by noise,
+    artifacts, and departures from the model, and changes in performance
+    after a change of the code.
+  \Misses Errors smaller than the uncertainty of the truth, and errors where
+    the truth is unknown; truth sets often cover only the regions where it is
+    certain. A failure may be a limit of the method rather than a bug, since
+    a correct implementation can miss the truth: the test checks the
+    implementation when its bound comes from the known performance of the
+    method, while whether the method suits the data is validation.
+  \Cost High: data with a known truth are rare, expensive to make, and often
+    large, which makes slow tests, and their license has to allow
+    redistribution.
+  \PairsWith Real data (\ref{sec:real-data}), which it needs; end-to-end
+    tests (\ref{sec:end-to-end}).
+  \Example A variant caller run on a region of a reference genome with a
+    published truth set, with its sensitivity and precision compared with
+    the values published for the method.
+  \See \TestingRef{About this guide}, on testing and validation;
+    \TestingRef{Know the answer before you ask}, on tolerances derived from
+    the precision of a reference.
+\end{typecard}
+
+
+
+\subsection{Order of convergence}
+\label{sec:convergence}
+
+\begin{typecard}
+  \Definition A discretization is run at a sequence of resolutions against
+    an exact solution, and the rate at which its error falls is compared
+    with the order of the method. Where no exact solution exists, the method
+    of manufactured solutions provides one. The same idea applies to Monte
+    Carlo estimates, whose error falls as $N^{-1/2}$ in the number of
+    samples, and to iterative solvers.
+  \Catches Bugs that lower the order of the method, such as a boundary
+    condition applied one step late or a wrong coefficient, which still give
+    a small error on a fine enough grid and so pass a test at one
+    resolution.
+  \Misses Errors in terms that the exact solution does not exercise, such as
+    a term with a derivative that vanishes for the chosen solution, and
+    errors of the model itself: the right equations, solved correctly, can
+    still be the wrong physics.
+  \Cost High: several runs, some at fine resolution, at resolutions fine
+    enough for the leading term of the error to dominate and coarse enough
+    for rounding error not to.
+  \PairsWith Unit (\ref{sec:unit}) and integration tests
+    (\ref{sec:integration}) of solvers, quadrature rules, and
+    finite-difference schemes, on a problem with an exact or a manufactured
+    solution.
+  \Example Halving the step of a second-order solver for an ordinary
+    differential equation with a known solution divides the error by about
+    four.
+  \See \TestingRef{Check the order of convergence}.
+\end{typecard}
+
+
+
+% ==========================================================
+\section{Tests by name}
+\label{sec:by-name}
+% ==========================================================
+
+Many tests are known by a name that is not a type of its own. Some names
+stand for a combination of types, such as property-based test; others add
+the purpose a test serves or the moment it runs, such as regression test and
+smoke test. Table~\ref{tab:by-name} lists common ones, with the types that
+they usually combine and what the name adds. The numbers refer to the
+subsections of this document.
+
+Some names belong to activities that are not tests of results. Mutation
+testing and code coverage check the test suite itself (\TestingRef{A test
+that cannot fail tests nothing}), benchmarks measure performance
+(\DesignRef{Size matters}), and validation asks whether the method fits the
+scientific question, which no test can answer (\TestingRef{About this
+guide}).
+
+\begingroup
+\small
+\begin{xltabular}{\textwidth}{@{}P{0.15}P{0.13}P{0.15}P{0.16}L@{}}
+  \caption{Common names of tests, with the types that they usually combine.}
+  \label{tab:by-name} \\
+  \toprule
+  Name & Scope & Inputs & Oracle & What the name adds \\
+  \midrule
+  \endfirsthead
+  \toprule
+  Name & Scope & Inputs & Oracle & What the name adds \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endlastfoot
+  Benchmark problem
+    & End-to-end (\ref{sec:end-to-end})
+    & A standard problem of the field (\ref{sec:examples})
+    & Known answer (\ref{sec:known-answer}), or the results of other codes
+      (\ref{sec:second-opinion})
+    & A problem that a community agreed on, such as a shock tube in fluid
+      dynamics, so that codes can be compared. Not a benchmark of
+      performance. \\
+  \addlinespace
+  Doc test
+    & Unit (\ref{sec:unit})
+    & The example in the documentation (\ref{sec:examples})
+    & Its printed output, as a snapshot (\ref{sec:snapshot}), or it runs
+      (\ref{sec:it-runs})
+    & Keeps the examples of the documentation working: doctest in Python
+      compares their printed output, and R CMD check runs the examples of an
+      R package. \\
+  \addlinespace
+  Fuzz test
+    & Unit or end-to-end
+    & Generated (\ref{sec:generated}), often malformed
+    & It runs (\ref{sec:it-runs}), or the documented error
+    & Searches for inputs that crash the code or slip past its validation;
+      runs for hours, apart from the test suite. \\
+  \addlinespace
+  Golden master, characterization test, approval test
+    & End-to-end (\ref{sec:end-to-end})
+    & Hand-picked examples (\ref{sec:examples}) or real data
+      (\ref{sec:real-data})
+    & Snapshot (\ref{sec:snapshot})
+    & Records the behavior of existing code, often before code without tests
+      is changed. In an approval test, a person approves each new reference
+      output. \\
+  \addlinespace
+  Gradient check
+    & Unit (\ref{sec:unit})
+    & Hand-picked or generated points (\ref{sec:generated})
+    & Second opinion (\ref{sec:second-opinion}): finite differences
+    & Checks a derivative, coded by hand or computed by automatic
+      differentiation, against finite differences of the function. \\
+  \addlinespace
+  Manufactured solution
+    & Unit or integration (\ref{sec:integration})
+    & A problem built from a chosen solution
+    & Order of convergence (\ref{sec:convergence})
+    & Provides an exact solution where none is known: the chosen function,
+      inserted into the equations, gives the source terms that it
+      requires. \\
+  \addlinespace
+  Property-based test
+    & Unit (\ref{sec:unit})
+    & Generated (\ref{sec:generated})
+    & Invariant (\ref{sec:invariant}), metamorphic relation
+      (\ref{sec:metamorphic}), or round trip (\ref{sec:round-trip})
+    & A framework, such as Hypothesis for Python or quickcheck for R,
+      generates the inputs, searches the edges, and reduces a failing input
+      to a minimal one. \\
+  \addlinespace
+  Regression test
+    & Any
+    & The input that exposed a bug
+    & Any; often a known answer (\ref{sec:known-answer})
+    & Added when a bug is fixed, so that the bug cannot return unnoticed.
+      Some communities also call snapshot tests regression tests. \\
+  \addlinespace
+  Simulation study
+    & Integration or end-to-end
+    & Simulated data (\ref{sec:simulated}), many datasets
+    & Parameter recovery (\ref{sec:recovery})
+    & Measures bias and coverage over many simulated datasets; slow, so it
+      runs apart from the fast tests. Its coverage is that of intervals, not
+      of code. \\
+  \addlinespace
+  Smoke test
+    & End-to-end (\ref{sec:end-to-end})
+    & A small hand-picked example (\ref{sec:examples})
+    & It runs (\ref{sec:it-runs})
+    & Runs first, after a build, an installation, or a change of
+      environment, to decide whether the other tests are worth running. \\
+\end{xltabular}
+\endgroup
+
+
+
+\end{document}

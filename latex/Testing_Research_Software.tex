@@ -172,24 +172,11 @@ stated in one of the two documents only.
 
 The terms defined in \emph{Design Principles}, such as package, library code,
 workflow code, entry point, host stack, and caller, carry the same meaning
-here. This guide adds:
-
-\begin{description}
-  \item[Test] Code that runs part of the package on a chosen input and checks
-    the result automatically, with the outcome pass or fail.
-  \item[Test suite] All tests of a package, run together by the test runner
-    of the host stack, such as testthat in R or pytest in Python.
-  \item[Oracle] The source of the expected value that a test compares a
-    result with (Subsection~\ref{sec:oracle}).
-  \item[Tolerance] The largest difference between a result and its expected
-    value that a test accepts (Subsection~\ref{sec:float-tests}).
-  \item[Unit test] A test of one function, or of a few functions together, on
-    a tiny input.
-  \item[End-to-end test] A test that runs an entry point, such as a workflow
-    or a command, from start to finish on a small dataset.
-  \item[Snapshot test] A test that compares a result with a reference output
-    stored from an earlier run of the code (Subsection~\ref{sec:snapshots}).
-\end{description}
+here. The terms of testing, such as test, test suite, oracle, and tolerance,
+and the types of tests, such as unit test, end-to-end test, and snapshot
+test, are defined in \emph{Types of Research Software Tests}, which also
+describes what each type catches and what it misses. This guide uses them
+with that meaning.
 
 
 

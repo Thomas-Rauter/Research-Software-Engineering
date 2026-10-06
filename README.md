@@ -21,3 +21,11 @@ How to test research software: where the expected values of tests come from,
 how to write tests that catch a plausible, wrong number, and how to keep a
 test suite honest as the code changes. Short principles, meant for looking
 things up while working.
+
+## [Types of Research Software Tests](pdf/Types_of_Research_Software_Tests.pdf)
+
+The types of tests for research software, and the terms of testing that the
+other two documents use. Every test makes three choices: its scope, its
+inputs, and its oracle. For each type, the same fields say what it is, what
+it catches, what it misses, and what it pairs with, and a table explains
+common names such as smoke test and regression test.
