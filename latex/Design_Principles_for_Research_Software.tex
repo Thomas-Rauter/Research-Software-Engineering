@@ -441,6 +441,9 @@ states no principles of its own.
   \ref{sec:modules} & \nameref{sec:modules}
     & Give each function, module, and step one job, and let them depend on each
       other only through their interfaces. \\
+  \ref{sec:substitution} & \nameref{sec:substitution}
+    & Anything that stands in for something else, such as a subclass, a
+      backend, or a replaced tool, must keep its whole contract. \\
   \addlinespace
   \GlanceSection{sec:api} \\*
   \midrule
@@ -909,9 +912,14 @@ a returned tuple are part of the contract only if they are documented; if a
 caller needs them, document them and test them. Pass data through arguments
 and return values rather than through state that several parts read and
 write (Subsections~\ref{sec:mutation} and~\ref{sec:global-state}). A part
-that depends only on its inputs can also be tested on its own.
+that depends only on its inputs can also be tested on its own. Pass a
+function the values it uses, not the whole configuration from which it reads
+two of them: its signature then shows what its result depends on, and a test
+does not have to build a complete configuration.
 
-High cohesion is the other half. A part with one job can be named for it, and
+High cohesion is the other half, and the single responsibility principle
+states it for classes and modules: each should have one reason to change.
+A part with one job can be named for it, and
 understood, tested, and replaced on its own. A part with several jobs couples
 them, because a change to one risks the others, and a part that cannot be
 named precisely usually has no single job.
@@ -934,6 +942,65 @@ passed between them is an interface (Subsection~\ref{sec:hand-off}). A step
 that reads the temporary files of another, or relies on the order in which
 independent steps happen to run, is coupled to it in a way the workflow
 manager cannot see.
+
+
+
+\subsection{Liskov substitution: a stand-in keeps every promise}
+\label{sec:substitution}
+
+Anything that stands in for something else must keep the documented contract
+of what it stands in for: every operation that it supports must mean what it
+means for the original. A stand-in is a subclass, a type that implements an
+interface of the host stack, such as its array or data frame interface, a
+backend that runs the same method on other hardware, or a tool or workflow
+step that replaces another.
+
+A broken contract rarely shows. The code written for the original runs on the
+stand-in unchanged and returns a plausible wrong number
+(Subsection~\ref{sec:loud}), and nobody notices, because not noticing was the
+point of the substitution. In Python, \texttt{numpy.matrix} is a subclass of
+the array type, but \texttt{*} multiplies matrices instead of elements, so
+code written for arrays computes something else; this is one reason its use
+is discouraged. In R, a tibble is a \texttt{data.frame}, but \texttt{df[, 1]}
+returns a tibble of one column rather than a vector, so code that asks for
+the length of the column gets 1 instead of the number of rows. The contract
+includes the numerical behavior: the type and precision of results, the
+treatment of missing values (Subsection~\ref{sec:missing}), axis order and
+units (Subsection~\ref{sec:conventions}), sign and normalization conventions,
+and the defaults (Subsection~\ref{sec:numeric-defaults}).
+
+This is the other side of Subsection~\ref{sec:modules}: a caller should
+depend only on what another part promises, and a stand-in must keep all of
+it. Subsection~\ref{sec:explicit} holds an entry point to its name; this
+principle holds a stand-in to the type it claims to be. Where a stand-in
+cannot keep the meaning of an operation, it should raise an error for it
+rather than do something else. The strict form of the principle forbids this
+too, but an error narrows the claim where the caller sees it
+(Subsection~\ref{sec:loud}), while a different result breaks it where nobody
+does. A stand-in that cannot keep most of the contract should not make the
+claim at all.
+
+\textbf{Library code.} Prefer wrapping a type that the package does not own,
+such as an array or data frame type of the host stack, to inheriting from it.
+A class that holds an array promises only the operations it defines; a
+subclass promises every operation of its parent, including those the parent
+gains in later releases. A backend that the caller selects to run the same
+method, such as on an accelerator, is a stand-in for the default one: it may
+round differently, by an amount the documentation states, but it must
+compute the same quantity. A different method selected by an option is not a
+stand-in; it is documented as a method of its own
+(Subsection~\ref{sec:document-method}).
+
+\textbf{Workflow code.} Replacing a tool or a step makes the new one a
+stand-in for the old one, whether or not its authors claim it, because the
+steps that read its files keep assuming the old meaning. A valid format is
+not enough (Subsection~\ref{sec:hand-off}). Two read aligners, such as BWA
+and Bowtie~2, both write valid BAM files, but they score mapping quality on
+different scales, so a later step that keeps reads with a mapping quality of
+at least 30 keeps a different set of reads after the swap. Before replacing a
+tool, check every value that later steps read for a change of meaning, such
+as a quality score, whether coordinates start at 0 or 1, or a normalization,
+and adapt those steps where it changed.
 
 
 
