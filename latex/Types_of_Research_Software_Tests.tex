@@ -118,6 +118,8 @@
 % reach into another PDF, so the title is the reference.
 \newcommand{\DesignRef}[1]{\emph{Design Principles}, ``#1''}
 \newcommand{\TestingRef}[1]{\emph{Testing Research Software}, ``#1''}
+\newcommand{\DocumentingRef}[1]{\emph{Documenting Research Software},
+  ``#1''}
 
 % ==================
 % Start the document
@@ -135,9 +137,9 @@
 This document describes the types of tests for research software: what each
 type is, what it catches, and what it misses. It belongs to the same set as
 \emph{Design Principles for Research Software}, cited below as \emph{Design
-Principles}, and \emph{Testing Research Software}, and it is the one place
-where the set defines the terms of testing. The other two documents use them
-with the meaning given here.
+Principles}, \emph{Testing Research Software}, and \emph{Documenting
+Research Software}, and it is the one place where the set defines the terms
+of testing. The other documents use them with the meaning given here.
 
 Every test makes three choices: its scope, what runs
 (Section~\ref{sec:scope}); its inputs, what goes in
@@ -197,7 +199,7 @@ Every type is described by the same fields, in the same order:
 
 The terms defined in \emph{Design Principles}, such as package, library code,
 workflow code, entry point, host stack, and caller, carry the same meaning
-here. The terms of testing are defined here, for all three documents:
+here. The terms of testing are defined here, for all documents of the set:
 
 \begin{description}
   \item[Test] Code that runs part of the package on an input and checks the
@@ -570,7 +572,8 @@ lists strong oracles for common kinds of code.
     file it promises.
   \See \DesignRef{Test the whole workflow on a small dataset}, which asks for
     more than this oracle: it requires checking the outputs, not only that
-    the run finished.
+    the run finished. \DocumentingRef{Every example runs}, which runs the
+    examples of the documentation with this oracle or a snapshot.
 \end{typecard}
 
 
@@ -597,7 +600,8 @@ lists strong oracles for common kinds of code.
   \Example The table of model estimates for a reference dataset, compared
     within a tolerance with the table stored at the last release.
   \See \TestingRef{Unchanged is not correct}; \TestingRef{Compare floats
-    with tolerance}.
+    with tolerance}; \DocumentingRef{Every example runs}, for the output
+    shown in the documentation.
 \end{typecard}
 
 
