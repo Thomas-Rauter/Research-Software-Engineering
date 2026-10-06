@@ -67,6 +67,8 @@ consistency, and tightening the prose.
   the title, linked to the PDF, and a short description.
 - `Makefile` and `build/Dockerfile` build the PDFs; `build/README.md`
   explains how. `_config.yml` configures the website.
+- `favicon.svg` is the icon of the website, and `_includes/head-custom.html`
+  links it into every page.
 
 ## Structure of the design principles
 

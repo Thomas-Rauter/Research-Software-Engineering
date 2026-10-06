@@ -4,7 +4,7 @@
 # Keep equal to the first heading of README.md, or the theme shows both.
 title: Research Software Guidelines
 
-# Publish only the landing page and the PDFs.
+# Publish only the landing page, the PDFs, and the favicon.
 exclude:
   - latex
   - build
