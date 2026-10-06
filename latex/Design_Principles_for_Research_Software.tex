@@ -107,9 +107,11 @@
   leftrule=3pt, sharp corners, left=8pt, right=8pt, top=5pt, bottom=5pt,
   before skip=6pt, after skip=10pt}
 
-% Cite a principle of the other document by its title. A \ref cannot
+% Cite a principle of the other documents by its title. A \ref cannot
 % reach into another PDF, so the title is the reference.
 \newcommand{\TestingRef}[1]{\emph{Testing Research Software}, ``#1''}
+\newcommand{\DocumentingRef}[1]{\emph{Documenting Research Software},
+  ``#1''}
 
 % ==================
 % Start the document
@@ -137,14 +139,15 @@ science is known; the task is to make it reliable, automated, and fit to run
 at scale.
 
 How to test research software is the subject of a separate document,
-\emph{Testing Research Software}. The two form one set of guidelines: that
-document uses the ladder, the normative language, and the terminology
-defined here, and its rules carry the same weight. Each rule is stated in
-only one of the two documents, and each cites the principles of the other by
-their title. A third document, \emph{Types of Research Software Tests},
-states no rules: it defines the terms of testing for both, such as oracle,
-unit test, and snapshot test, and describes what each type of test catches
-and what it misses.
+\emph{Testing Research Software}, and how to document it the subject of
+another, \emph{Documenting Research Software}. The three form one set of
+guidelines: the other two use the ladder, the normative language, and the
+terminology defined here, and their rules carry the same weight. Each rule
+is stated in only one of the three documents, and each cites the principles
+of the others by their title. A fourth document, \emph{Types of Research
+Software Tests}, states no rules: it defines the terms of testing for all of
+them, such as oracle, unit test, and snapshot test, and describes what each
+type of test catches and what it misses.
 
 
 
@@ -435,6 +438,9 @@ states no principles of its own.
       numerical role. \\
   \ref{sec:wrong-abstraction} & \nameref{sec:wrong-abstraction}
     & Unify similar code only when it encodes the same rule. \\
+  \ref{sec:modules} & \nameref{sec:modules}
+    & Give each function, module, and step one job, and let them depend on each
+      other only through their interfaces. \\
   \addlinespace
   \GlanceSection{sec:api} \\*
   \midrule
@@ -449,8 +455,8 @@ states no principles of its own.
     & Keep the public API small, number releases by compatibility, and deprecate
       before removing. \\
   \ref{sec:document-method} & \nameref{sec:document-method}
-    & Document the algorithm, its assumptions, defaults, and references, not the
-      structure of the code. \\
+    & Document the algorithm, its assumptions, defaults, and references, and
+      every difference from them, not the structure of the code. \\
   \addlinespace
   \GlanceSection{sec:explicit-behavior} \\*
   \midrule
@@ -525,9 +531,6 @@ states no principles of its own.
   \addlinespace[4pt]
   \GlanceSection{sec:library-structure} \\*
   \midrule
-  \ref{sec:modules} & \nameref{sec:modules}
-    & Give each module one responsibility, with dependencies pointing from the
-      specific to the fundamental. \\
   \ref{sec:functions} & \nameref{sec:functions}
     & Put library code in functions and classes; at module level, only imports,
       constants, and definitions. \\
@@ -775,7 +778,8 @@ be optional, so that the core installs without them.
 \textbf{The package itself.} Build it to survive its authors. No part of the
 code should be understood by only one person, and the knowledge needed to
 maintain it, such as design decisions, conventions, and the release process,
-belongs in the repository, not in people's heads.
+belongs in the repository, not in people's heads (\DocumentingRef{Comments
+say why, not what}).
 
 
 
@@ -876,6 +880,60 @@ new abstraction only once the genuinely shared rule has become visible.
 
 
 
+\subsection{Low coupling, high cohesion}
+\label{sec:modules}
+
+Keep together what changes together, and keep apart what changes
+independently. Each function, class, module, and workflow step should have
+one job, and the parts should depend on each other only through their
+interfaces: arguments, return values, documented behavior, and declared
+files. A change to one part then stays in that part.
+
+Coupling as such cannot be avoided, and some of it is wanted: parts that use
+the same knowledge should depend on its single definition
+(Subsection~\ref{sec:dry}), while parts that merely look alike should not be
+tied together by a shared abstraction
+(Subsection~\ref{sec:wrong-abstraction}). What has to be avoided is hidden
+coupling. Coupling through an interface breaks loudly: when a signature
+changes, its callers fail. Hidden coupling breaks silently. A function that
+relies on another to return its rows sorted, or on a module-level variable
+that a third one sets, keeps running after that behavior changes and returns
+a plausible wrong number (Subsection~\ref{sec:loud}).
+
+Depend only on what another part promises, not on what it happens to do. Row
+order, whether a result is a copy or a view, and the position of a value in
+a returned tuple are part of the contract only if they are documented; if a
+caller needs them, document them and test them. Pass data through arguments
+and return values rather than through state that several parts read and
+write (Subsections~\ref{sec:mutation} and~\ref{sec:global-state}). A part
+that depends only on its inputs can also be tested on its own.
+
+High cohesion is the other half. A part with one job can be named for it, and
+understood, tested, and replaced on its own. A part with several jobs couples
+them, because a change to one risks the others, and a part that cannot be
+named precisely usually has no single job.
+
+\textbf{Library code.} Each module should own one part of the package, such
+as validation, computation, preprocessing, or visualization, and its name
+should say which. Avoid miscellaneous helper modules such as \texttt{utils}
+when a more specific name would describe the purpose of the code.
+Dependencies between modules should point in one direction, from the specific
+to the fundamental. Computation must not depend on visualization, and core
+computation should not depend on input and output. Knowledge shared by
+several modules, such as validation checks and numerical defaults, belongs in
+one module that the others import (Subsection~\ref{sec:dry}).
+
+\textbf{Workflow code.} Each step should do one job, such as aligning reads
+or regridding a field, so that it can be rerun, replaced, and checked on its
+own. Steps depend on each other only through the files and parameters they
+declare, as Subsection~\ref{sec:declared-inputs} requires, and every file
+passed between them is an interface (Subsection~\ref{sec:hand-off}). A step
+that reads the temporary files of another, or relies on the order in which
+independent steps happen to run, is coupled to it in a way the workflow
+manager cannot see.
+
+
+
 % ==========================================================
 \section{API design}
 \label{sec:api}
@@ -953,7 +1011,8 @@ defaults of its configuration, the formats of its inputs, and the names and
 layout of its outputs.
 
 Number releases so that the version communicates compatibility, for example
-with semantic versioning, and record every change of behavior in a changelog.
+with semantic versioning, and record every change of behavior in a changelog
+(\DocumentingRef{Keep a changelog}).
 Changes of numerical behavior, including changes of defaults
 (Subsection~\ref{sec:numeric-defaults}), must be listed explicitly in the
 changelog, not summarized as fixes.
@@ -977,7 +1036,8 @@ documentation of a user-facing function, a command, or a workflow should
 state the algorithm or estimator, the approximations and assumptions it
 makes, its numerical defaults, its policy for missing values
 (Subsection~\ref{sec:missing}), and references to the literature that
-defines the method; for a workflow, it also names the method and the tool
+defines the method, with every difference between the implementation and
+that literature; for a workflow, it also names the method and the tool
 that each step uses. Users need this knowledge to interpret and report their
 results.
 
@@ -985,7 +1045,8 @@ Implementation details, such as loop structure, internal data structures, and
 private helper functions, do not belong in user documentation. The dividing
 line is whether a change could alter a scientific result: if it could, it is
 part of the method and must be documented; if it could not, it is
-implementation.
+implementation. How documentation is organized, written, and kept true as the
+code changes is the subject of \emph{Documenting Research Software}.
 
 
 
@@ -1303,7 +1364,7 @@ public archive with a persistent identifier, such as a DOI, for published
 software, or in the organization's release archive for internal software.
 Published software should also provide machine-readable citation metadata,
 such as a \texttt{CITATION.cff} file, stating how to cite both the software
-and the method.
+and the method (\DocumentingRef{Credit where credit is due}).
 
 Results should record the package version and the parameters that produced
 them, including defaults that were not set explicitly: library code records
@@ -1468,24 +1529,6 @@ the counts (\TestingRef{Test invariants, not only examples}).
 \section{Structure}
 \label{sec:library-structure}
 % ==========================================================
-
-\subsection{Design modules around clear responsibilities}
-\label{sec:modules}
-
-Organize code into modules with clear, coherent responsibilities. Each module
-should own one part of the package, such as validation, computation,
-preprocessing, or visualization, and its name should say which. Avoid
-miscellaneous helper modules such as \texttt{utils} when a more specific name
-would describe the purpose of the code; a module that cannot be named
-precisely usually has no single responsibility.
-
-Dependencies between modules should point in one direction, from the specific
-to the fundamental. Computation must not depend on visualization, and core
-computation should not depend on input and output. Knowledge shared by several
-modules, such as validation checks and numerical defaults, belongs in one
-module that the others import (Subsection~\ref{sec:dry}).
-
-
 
 \subsection{No code at large}
 \label{sec:functions}

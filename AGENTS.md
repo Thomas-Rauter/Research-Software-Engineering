@@ -20,6 +20,13 @@ numerical stability, conditioning and convergence, units and axis
 conventions, missing values, numerical defaults as part of the API,
 reproducibility, and traceability of results.
 
+The readers of all documents are research software engineers: first
+the author, and possibly colleagues at work. They program and know general
+software engineering, so established terms such as coupling, cohesion, or
+semantic versioning need no introduction. Spend the words on what the
+scientific setting adds, not on the basics. The scope above describes the
+software the guidelines cover, not their readers.
+
 The second document, *Testing Research Software*, is about how to test
 research software. It stands beside *Design Principles*, not below it: the
 two form one set of guidelines, and neither is presented as a companion or
@@ -27,7 +34,15 @@ appendix of the other. Its core idea is that a test is only as good as its
 oracle, the source of its expected value. It is short and meant for looking
 things up while working, not for reading from cover to cover.
 
-The third document, *Types of Research Software Tests*, defines the terms of
+The third document, *Documenting Research Software*, is about how to document
+research software. It stands beside *Design Principles* as the testing guide
+does. Its core idea is that users act on documentation: they choose
+parameters by it and copy its description of the method into their papers,
+so wrong documentation does the damage of a wrong number, and documentation
+stays true only if it lives, changes, and is checked with the code. It is
+short and meant for looking things up as well.
+
+The fourth document, *Types of Research Software Tests*, defines the terms of
 testing for the whole set: test, test suite, oracle, tolerance, and every
 type of test. Its core idea is that every test makes three choices, its
 scope (what runs), its inputs (what goes in), and its oracle (what the
@@ -43,7 +58,8 @@ consistency, and tightening the prose.
 - `latex/NAME.tex` is the source of a document and the source of truth. All
   edits go here, for example to
   `latex/Design_Principles_for_Research_Software.tex`,
-  `latex/Testing_Research_Software.tex`, or
+  `latex/Testing_Research_Software.tex`,
+  `latex/Documenting_Research_Software.tex`, or
   `latex/Types_of_Research_Software_Tests.tex`.
 - `pdf/NAME.pdf` is built from it and committed. The website serves the PDFs
   from this directory.
@@ -102,6 +118,24 @@ consistency, and tightening the prose.
 - The guide is prose only: no code examples in any language. Naming tools,
   such as pytest or Hypothesis, is fine.
 
+## Structure of the documentation guide
+
+- The front matter has the same three parts as the testing guide. "About
+  this guide" says what the guide covers and what *Design Principles* covers
+  instead, and "Normative language and the ladder" adopts both from *Design
+  Principles*. "Terminology" adopts the terms of *Design Principles* and of
+  the types document, and defines the only terms of its own: the four kinds
+  of documentation of Diátaxis, namely tutorial, how-to guide, reference,
+  and explanation.
+- "At a glance" follows on a page of its own: every principle with its
+  number, its title, and a one-line rule.
+- Three numbered `\section`s, without `\part`s: "What to document" (the
+  kinds of documents and the readers they serve), "Writing documentation",
+  and "Keeping documentation true". Each `\subsection` is one principle of
+  one to three paragraphs, as in the testing guide.
+- The guide is prose only, like the testing guide. Naming tools, such as
+  Sphinx, pkgdown, or Zenodo, is fine.
+
 ## Structure of the types document
 
 - The unnumbered front matter, "About this document", explains the three
@@ -109,7 +143,7 @@ consistency, and tightening the prose.
   one claim and that an entry point is tested by several tests with
   different oracles, and states that the document has no rules. "How to read
   a type" lists the fields, and "Terminology" defines test, test suite,
-  oracle, and tolerance for all three documents.
+  oracle, and tolerance for all documents of the set.
 - "At a glance" follows on a page of its own: every type with its number,
   its title, and a one-line definition.
 - Three numbered sections, "Scope: what runs", "Inputs: what goes in", and
@@ -134,15 +168,15 @@ consistency, and tightening the prose.
   Where a type comes with a rule, the rule stays in *Design Principles* or
   the testing guide, and the field "See" cites it.
 
-## The three documents
+## The four documents
 
-- *Design Principles* and the testing guide form one set of guidelines. The
-  testing guide uses the normative language, the ladder, the terminology,
-  and the priorities of *Design Principles*, and its *must*s are part of the
-  same floor.
+- *Design Principles*, the testing guide, and the documentation guide form
+  one set of guidelines. The two guides use the normative language, the
+  ladder, the terminology, and the priorities of *Design Principles*, and
+  their *must*s are part of the same floor.
 - *Types of Research Software Tests* is the one place where the terms of
   testing are defined: test, test suite, oracle, tolerance, and every type of
-  test. The other two documents use these terms with that meaning and do not
+  test. The other documents use these terms with that meaning and do not
   define them again; a new term of testing is added there.
 - The split: *Design Principles* says *that* code is tested and what the
   software itself must do, including checks the code makes on every run,
@@ -153,14 +187,24 @@ consistency, and tightening the prose.
   A sentence that says what someone must or should do belongs in one of
   these two; a sentence that says what a type of test is, catches, or misses
   belongs in the types document.
-- DRY holds across all three: each rule is stated in one document only, and
+- The split for documentation: *Design Principles* says what the
+  documentation must state because it is part of what the software promises,
+  such as the method with its assumptions, defaults, and references, the
+  policy for missing values, the complexity, the changelog, and the citation
+  metadata. The documentation guide says which documents a package has and
+  for which readers, and how they are written and kept true, including that
+  their examples run. Running an example is not a test of the result: a rule
+  about examples in the documentation belongs in the documentation guide, a
+  rule about tests in the testing guide. Before adding a principle about
+  documentation, decide by this rule which document it belongs in.
+- DRY holds across all four: each rule is stated in one document only, and
   the others cite it.
 - A `\ref` cannot reach into another PDF, so the documents cite each other's
-  principles by title: `\TestingRef{Title}` in *Design Principles*,
-  `\DesignRef{Title}` in the testing guide, and both in the types document,
-  defined in the customization zone. The title is the reference, so renaming
-  a principle means searching the other two documents for the old title and
-  updating it.
+  principles by title, with macros defined in the customization zone:
+  `\DesignRef{Title}`, `\TestingRef{Title}`, `\DocumentingRef{Title}`, and
+  `\TypesRef{Title}`. Each document defines those it uses. The title is the
+  reference, so renaming a principle means searching the other documents for
+  the old title and updating it.
 
 ## Writing a principle
 
@@ -179,6 +223,14 @@ both. The existing titles follow these patterns:
   tolerance".
 - A contrast: "Build the right thing before building the thing right",
   "Document the method, not the implementation".
+
+Prefer established principles to reinventing them. When an established
+software engineering principle covers the idea, build the principle around it
+and use its established name as the title, with the expansion of an acronym:
+readers may already know it and can look it up. Use the name only for the
+idea it stands for; a principle that merely resembles an established one gets
+a title of its own. Check for an established name before proposing other
+titles.
 
 A reader who remembers only the title should be able to recall what the
 principle demands. A clear title beats a clever one that needs explaining.
@@ -230,7 +282,7 @@ When proposing a title, offer several options.
   Keep existing labels stable, and make sure every `\ref` still resolves after an
   edit. The front-matter subsections are unnumbered, so a `\ref` to them
   prints an empty number; refer to them by name instead.
-- All three documents have an "At a glance" table. Its rows take the number
+- All four documents have an "At a glance" table. Its rows take the number
   and the title of each principle or type from its label (`\ref`,
   `\nameref`), and the macros `\GlancePart` and `\GlanceSection` write the
   header rows. The one-line rule, or in the types document the one-line
@@ -264,8 +316,8 @@ When proposing a title, offer several options.
 - Build with `make pdf Design_Principles_for_Research_Software`. It runs
   latexmk in a Docker container and writes only the PDF to `pdf/`; the
   auxiliary files stay in the container. The build fails on undefined
-  references. Commit the rebuilt PDF together with the `.tex` so the two stay
-  in sync.
+  references. The rebuilt PDF belongs in the same commit as the `.tex`, so
+  that the two stay in sync.
 - A new document also needs an entry in `README.md`: the title, linked to
   the PDF, and a short description. `make check` verifies that every document
   has a PDF and an entry.
@@ -276,3 +328,7 @@ When proposing a title, offer several options.
   passages.
 - Point out overlaps, contradictions, and weak arguments when you notice
   them, but do not fix them without being asked.
+- Never stage, commit, or push, not even when a task seems to call for it;
+  the author does that. End every task that changes files with a recommended
+  commit message, a header line and a body, in the style of the existing
+  commits.
