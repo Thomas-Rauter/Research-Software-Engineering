@@ -2,8 +2,8 @@
 title: Apptainer
 description: >-
   What a research software engineer needs from Apptainer day to day: writing
-  definition files, building and pulling images, running containers isolated
-  from the host, and running them in jobs on a cluster.
+  definition files, building and pulling images, running programs in them
+  isolated from the host, and running them in jobs on a cluster.
 order: 1
 format:
   html: default
@@ -13,13 +13,15 @@ format:
 
 # About this document {#sec-about .unnumbered}
 
-This document covers what research software engineers do with Apptainer
-regularly: write definition files, build and pull images, run containers, and
-run them in jobs on a cluster. Anything rarer, such as instances, MPI, or
-encrypted images, is in the
+Working with Apptainer comes down to two steps. An image is built from a
+definition file (@sec-definition-file), or pulled from a registry
+(@sec-images), and programs then run in the image (@sec-running), on a cluster
+usually in a job (@sec-cluster). This document covers what research software
+engineers need for these steps regularly. Anything rarer, such as MPI,
+overlays, or encrypted images, is in the
 [user guide of Apptainer](https://apptainer.org/docs/user/latest/).
-[](index.qmd) says when to use Apptainer instead of Docker and states the rules
-that hold for every image.
+[](index.qmd) says when to use Apptainer and states the rules that hold for
+every image.
 
 On clusters that still run Singularity or SingularityCE, the commands are
 mostly the same, with `singularity` in place of `apptainer`, and the
@@ -30,12 +32,12 @@ Checked against Apptainer 1.5.4.
 
 # Definition files {#sec-definition-file}
 
-A definition file, such as `analysis.def`, is the recipe of an image, the
-counterpart of a Dockerfile. It is divided into sections instead of
-instructions, and it builds no layers: every build runs the whole file again,
-with no cache of earlier steps. To find out what an image needs, try things
-out in a sandbox (@sec-sandbox). Keep the definition file in the repository of
-the code it packages ([](../../principles/design.qmd#sec-recipe)).
+A definition file, such as `analysis.def`, is the recipe of an image: a header
+that names the base image to start from, and sections that say what to copy
+into it, how to install the software, and how the image behaves when it runs.
+Every build runs the whole file from the start, so try things out in a sandbox
+first (@sec-sandbox). Keep the definition file in the repository of the code
+it packages ([](../../principles/design.qmd#sec-recipe)).
 
 ```default
 Bootstrap: docker
@@ -64,9 +66,10 @@ From: python:3.12-slim@sha256:<digest>
     org.opencontainers.image.version 1.2.0
 ```
 
-- **`Bootstrap` and `From`** name the base image, here one from Docker Hub,
-  pinned by its digest ([](index.qmd#sec-pin)). The registry shows the digest,
-  and so does `skopeo inspect docker://python:3.12-slim`.
+- **`Bootstrap` and `From`** name the base image: `Bootstrap: docker` takes it
+  from a registry, here Docker Hub, and `Bootstrap: localimage` from a SIF
+  file. Pin it by its digest ([](index.qmd#sec-pin)); the registry shows the
+  digest, and so does `skopeo inspect docker://python:3.12-slim`.
 - **`%files`** copies files and directories from the host into the image,
   before `%post` runs. Build in the directory that holds the definition file
   and the files it copies.
@@ -122,12 +125,11 @@ apptainer pull python.sif docker://python:3.12-slim@sha256:<digest>
 ```
 
 `apptainer pull` downloads an image from a registry and converts it into a SIF
-file, squashing its layers into one. `docker://` reaches Docker Hub and other
-registries, such as `docker://ghcr.io/lab/analysis`. Name the image by its
-digest, as in a definition file ([](index.qmd#sec-pin)). An image built with
-the local Docker is converted with
-`apptainer build analysis.sif docker-daemon://analysis:1.2.0`. Every pulled
-image also lands in the cache (@sec-cache).
+file. `docker://` reaches Docker Hub and the other registries of container
+images, such as `docker://quay.io/lab/analysis` or
+`docker://ghcr.io/lab/analysis`. Name the image by its digest, as in a
+definition file ([](index.qmd#sec-pin)). Every pulled image also lands in the
+cache (@sec-cache).
 
 
 ## Try things out in a sandbox {#sec-sandbox}
@@ -163,13 +165,16 @@ holds even when its source is lost. For R, `Rscript -e 'sessionInfo()'` lists
 the packages instead of `pip list`.
 
 
-# Containers {#sec-containers}
+# Running an image {#sec-running}
 
-A container is a program running in an image, and it ends when the program
-ends. Unlike Docker, Apptainer keeps no stopped containers to list or remove:
-each run starts afresh from the image. Inside, the user is the same as outside,
-with the same rights. The image is read-only, so a program writes its results
-into a directory of the host that is bound into the container (@sec-binds).
+A program runs in an image with `apptainer exec`, `run`, or `shell`. It sees
+the files of the image instead of those of the host, apart from the
+directories that Apptainer binds in (@sec-binds), and it runs as the same user
+as outside, with the same rights. When the program ends, nothing is left
+behind, so there is nothing to start, stop, or clean up around a run.
+Apptainer calls a program running in an image a *container*; its own
+documentation often uses the word for the image file as well. The image is
+read-only, so a program writes its results into a bound directory of the host.
 
 
 ## Run a program {#sec-run}
