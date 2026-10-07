@@ -1,0 +1,35 @@
+---
+title: Research Software Engineering
+format: html
+number-sections: false
+toc: false
+---
+
+Notes on research software engineering: how to design, test, and document
+research software, how to write it in the programming languages it is written
+in, and how to use the tools it is run with. They cover research software in
+the broadest sense, in academia and in industry, from the one-off script of a
+PhD student to the libraries and workflows that a community or a company
+relies on. Every document can be read here or downloaded as a PDF.
+
+
+## [Principles](principles/index.qmd)
+
+What holds in any programming language and with any tools: the design
+principles of research software, and how to test and document it. The
+principles also define the normative language, the ladder, and the terminology
+that the other two parts use.
+
+
+## [Languages](languages/index.qmd)
+
+How to write research software in one programming language, such as Python,
+R, SQL, or Bash: its rules and pitfalls, its common operations, and its own
+tooling.
+
+
+## [Tools](tools/index.qmd)
+
+How to use the tools that research software is run, stored, tracked, and served
+with, whatever its language, organized by job: containers, workflow managers,
+scheduling, cloud computing, data formats, experiment tracking, and services.

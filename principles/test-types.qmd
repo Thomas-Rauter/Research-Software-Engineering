@@ -1,0 +1,922 @@
+---
+title: Types of Research Software Tests
+description: >-
+  The types of tests for research software, and the terms of testing that the
+  other documents use. Every test makes three choices: its scope, its inputs,
+  and its oracle. For each type, the same fields say what it is, what it
+  catches, what it misses, and what it pairs with, and a table explains common
+  names such as smoke test and regression test.
+order: 4
+format:
+  html: default
+  pdf:
+    output-file: Types_of_Research_Software_Tests
+---
+
+# About this document {#sec-about .unnumbered}
+
+This document describes the types of tests for research software: what each
+type is, what it catches, and what it misses. It belongs to the same set as
+[](design.qmd), cited below as *Design Principles*, [](testing.qmd), and
+[](documenting.qmd), and it is the one place where the set defines the terms of
+testing. The other documents use them with the meaning given here.
+
+Every test makes three choices: its scope, what runs (@sec-scope); its inputs,
+what goes in (@sec-inputs); and its oracle, what the result is checked against
+(@sec-oracles). Each subsection of these three sections describes one type, and
+a test takes one type from each section. A property-based test, for example, is
+usually a unit test on generated inputs with an invariant as its oracle. The
+three choices are largely independent: a unit test can use any oracle, and most
+oracles can check a single function as well as a whole workflow. Some
+combinations do not work, though, such as generated inputs with a known answer,
+because an arbitrary input has none; the field "Pairs with" of each type says
+which.
+
+A test checks one claim, and each oracle sees some errors and is blind to
+others. One test, however well chosen, therefore checks only one aspect of an
+entry point, and an entry point is tested by several tests with different
+oracles. How many, and which, is the subject of [](testing.qmd#sec-oracle).
+
+Many tests are known by a name that is not a type of its own, such as smoke
+test or regression test. Such a name stands for a combination of types, or for
+the purpose a test serves; @sec-by-name lists common ones.
+
+This document states no rules. Where a type comes with a requirement or a
+default, such as the tolerance of a comparison of floating-point numbers, its
+field "See" cites the principle that states it.
+
+
+## How to read a type {#sec-fields .unnumbered}
+
+Every type is described by the same fields, in the same order:
+
+Definition
+:   What the type is.
+
+Catches
+:   The errors it finds.
+
+Misses
+:   The errors it cannot find, and so the reason to combine it with other
+    types.
+
+Cost
+:   The effort to write it, the time to run it, and the work to keep it up to
+    date.
+
+Pairs with
+:   The types of the other two sections that it works with, and those it does
+    not.
+
+Example
+:   One test of the type, from a scientific field.
+
+See
+:   The principles that state rules about the type, and related types.
+
+
+## Terminology {#sec-terminology .unnumbered}
+
+The terms defined in [*Design Principles*](design.qmd#sec-terminology), such as
+package, library code, workflow code, entry point, host stack, and caller,
+carry the same meaning here. The terms of testing are defined here, for all
+documents of the set:
+
+Test
+:   Code that runs part of the package on an input and checks the result
+    automatically, with the outcome pass or fail.
+
+Test suite
+:   All tests of a package, run together by the test runner of the host stack,
+    such as testthat in R or pytest in Python.
+
+Oracle
+:   The source of the expected value that a test compares a result with, or of
+    the property that it checks (@sec-oracles).
+
+Tolerance
+:   The largest difference between a result and its expected value that a test
+    accepts.
+
+Each type, such as unit test, edge case, or snapshot, is defined in its own
+subsection of Sections [-@sec-scope] to [-@sec-oracles], and the common names
+of tests, such as smoke test, in @sec-by-name.
+
+<!-- The overview gets a page of its own, so that it can be printed. -->
+
+{{< pagebreak >}}
+
+
+# At a glance {#sec-at-a-glance .unnumbered}
+
+Every type of this document in one line. The number and the title link to the
+type. A test takes one type from each of the three sections.
+
+::: {.glance}
+| No. | Type | Definition |
+|-----|----------------------|------------------------------------------------------------|
+| **[-@sec-scope]** | **[](#sec-scope)** | |
+| [-@sec-unit] | [](#sec-unit) | One function, or a few that work closely together, called directly. |
+| [-@sec-integration] | [](#sec-integration) | Several parts run together, to check that they fit. |
+| [-@sec-end-to-end] | [](#sec-end-to-end) | An entry point run the way its caller runs it, from start to finish. |
+| **[-@sec-inputs]** | **[](#sec-inputs)** | |
+| [-@sec-examples] | [](#sec-examples) | Small, typical inputs that the author of the test writes into it. |
+| [-@sec-edges] | [](#sec-edges) | Empty, single, tied, missing, extreme, and nearly singular inputs. |
+| [-@sec-generated] | [](#sec-generated) | Many inputs, produced by a program from the documented input domain. |
+| [-@sec-simulated] | [](#sec-simulated) | Data drawn from the model, with parameters known exactly. |
+| [-@sec-real-data] | [](#sec-real-data) | Data from a real measurement or collection, or an excerpt of it. |
+| **[-@sec-oracles]** | **[](#sec-oracles)** | |
+| [-@sec-it-runs] | [](#sec-it-runs) | The code finishes without an error; the result is not checked. |
+| [-@sec-snapshot] | [](#sec-snapshot) | The result agrees with a stored output of an earlier run. |
+| [-@sec-reproducibility] | [](#sec-reproducibility) | The result agrees with that of another run of the same code. |
+| [-@sec-known-answer] | [](#sec-known-answer) | The result agrees with an exact value obtained without the code. |
+| [-@sec-invariant] | [](#sec-invariant) | The result has a property that every correct result has. |
+| [-@sec-metamorphic] | [](#sec-metamorphic) | A known change of the input changes the result in a known way. |
+| [-@sec-round-trip] | [](#sec-round-trip) | An operation followed by its inverse returns the input. |
+| [-@sec-second-opinion] | [](#sec-second-opinion) | The result agrees with that of an independent implementation. |
+| [-@sec-recovery] | [](#sec-recovery) | The method recovers the parameters behind simulated data, with honest uncertainty. |
+| [-@sec-ground-truth] | [](#sec-ground-truth) | The result agrees with a truth about real data that was established without the method. |
+| [-@sec-convergence] | [](#sec-convergence) | The error falls with the resolution at the rate of the method. |
+:::
+
+
+# Scope: what runs {#sec-scope}
+
+The scope of a test is the part of the package that it runs. The smaller the
+scope, the faster the test and the more precisely a failure points to its
+cause; the larger the scope, the more of the connections between the parts the
+test checks.
+
+
+## Unit test {#sec-unit}
+
+::: {.typecard}
+Definition
+:   A test that calls one function, or a few functions that work closely
+    together, directly and apart from the rest of the package.
+
+Catches
+:   Errors in the logic of that function, such as a wrong formula, sign, index,
+    or convention. A failing unit test points to the function that broke.
+
+Misses
+:   Errors in how the parts fit together, such as a result passed on in the
+    wrong units or order, a file that a later step cannot read, or an option
+    that never reaches the function.
+
+Cost
+:   The lowest of the three scopes: on a tiny input, a unit test finishes in a
+    fraction of a second, so hundreds of them run in minutes. It needs code
+    split into functions that can be called on their own.
+
+Pairs with
+:   Every type of input and of oracle. Hand-picked examples ([-@sec-examples])
+    with known answers ([-@sec-known-answer]) make the classic unit test;
+    generated inputs ([-@sec-generated]) with invariants ([-@sec-invariant])
+    make a property-based test.
+
+Example
+:   The log-likelihood of three observations under a normal distribution,
+    compared with the value worked out by hand.
+
+See
+:   [](testing.qmd#sec-small-tests).
+:::
+
+
+## Integration test {#sec-integration}
+
+::: {.typecard}
+Definition
+:   A test that runs several parts together, to check that they fit: the result
+    of one function passed to the next, a file written by one step and read by
+    another, or a call into an external library, such as a solver or a reader
+    of a file format. Its scope lies between that of a unit test and that of an
+    end-to-end test.
+
+Catches
+:   Mismatches at the interfaces, such as units or axis orders that differ
+    between the parts, identifiers lost on the way, and assumptions about a
+    dependency that do not hold, such as the meaning of its tolerance argument.
+
+Misses
+:   Errors inside a part that the combination happens to hide, and errors in
+    the configuration and the glue of a whole entry point.
+
+Cost
+:   Higher than for a unit test: it runs longer, it needs inputs that suit
+    every part, and a failure points to several parts at once.
+
+Pairs with
+:   Hand-picked examples ([-@sec-examples]) and simulated data
+    ([-@sec-simulated]); invariants ([-@sec-invariant]), such as counts and
+    identifiers that survive each interface; round trips ([-@sec-round-trip])
+    through a file format.
+
+Example
+:   The peaks found by a peak detector, passed to the function that fits them,
+    keep the identifiers and the units of their detection.
+
+See
+:   [](design.qmd#sec-applications), on keeping the driving applications as
+    integration tests.
+:::
+
+
+## End-to-end test {#sec-end-to-end}
+
+::: {.typecard}
+Definition
+:   A test that runs an entry point the way its caller runs it, from start to
+    finish: a workflow or a command, from its input files and configuration to
+    its outputs, or, for library code, the calls of a complete analysis, such
+    as a documented example.
+
+Catches
+:   Steps that do not fit together, files that a step cannot find or read,
+    options of the configuration that never reach their step, and errors in
+    code that no unit test runs.
+
+Misses
+:   Where an error is: a failure says that something broke, not what. Also
+    every input and branch that the small dataset does not reach.
+
+Cost
+:   Minutes rather than seconds, and a small dataset that reaches every step
+    and every branch of the configuration.
+
+Pairs with
+:   Simulated data ([-@sec-simulated]) with parameter recovery
+    ([-@sec-recovery]) as its oracle; invariants ([-@sec-invariant]), such as
+    the number of samples and the total of the counts; snapshots
+    ([-@sec-snapshot]) of the outputs. With "it runs" ([-@sec-it-runs]) as its
+    only oracle, it is a smoke test (@sec-by-name).
+
+Example
+:   A workflow run on six simulated samples: every sample appears in the final
+    table, and the estimated fold changes recover the simulated ones.
+
+See
+:   [](design.qmd#sec-end-to-end); [](testing.qmd#sec-small-tests).
+:::
+
+
+# Inputs: what goes in {#sec-inputs}
+
+The inputs decide which part of the input space a test explores. Inputs that a
+person chooses are few and go where the person looks, which is rarely where the
+bugs are. Inputs that a program generates reach much more of the space, but an
+arbitrary input comes without a known answer, so the inputs also decide which
+oracles a test can use.
+
+
+## Hand-picked examples {#sec-examples}
+
+::: {.typecard}
+Definition
+:   Small inputs that the author of a test chooses and writes into it, usually
+    typical ones: a few observations, a short sequence, a three-by-three
+    matrix.
+
+Catches
+:   Errors on typical inputs, which are the inputs that most users bring. A
+    small input makes the claim of the test readable and its expected value
+    easy to derive.
+
+Misses
+:   Everything the author did not think of. People choose inputs that they
+    expect to work, so hand-picked examples rarely reach the inputs where code
+    breaks.
+
+Cost
+:   Low to write and to run.
+
+Pairs with
+:   Known answers ([-@sec-known-answer]) worked out by hand; every scope, and
+    most other oracles.
+
+Example
+:   A two-by-two table of counts, small enough that the p-value of Fisher's
+    exact test can be computed by hand.
+
+See
+:   Edge cases ([-@sec-edges]) and generated inputs ([-@sec-generated]), which
+    reach what hand-picked examples miss.
+:::
+
+
+## Edge cases {#sec-edges}
+
+::: {.typecard}
+Definition
+:   Inputs at the edges of the input space: in size, such as an empty input and
+    a single element; in value, such as zeros, ties, and the boundaries of a
+    parameter's range; missing and special values, such as NA, NaN, and
+    infinities; extreme magnitudes and nearly singular inputs; and unusual
+    structure, such as unsorted input.
+
+Catches
+:   Crashes, silent NaNs, off-by-one errors, divisions by zero, and wrong
+    handling of missing values: code breaks at the edges, and typical data
+    never go there. Writing the test also reveals edges where the behavior is
+    not documented.
+
+Misses
+:   Errors in the interior of the input space, on typical data.
+
+Cost
+:   Low: the edges of most functions follow from a short list, and each test is
+    fast.
+
+Pairs with
+:   Known answers ([-@sec-known-answer]), including the documented error or
+    warning as the expected outcome; invariants ([-@sec-invariant]). Generated
+    inputs ([-@sec-generated]) search the edges automatically.
+
+Example
+:   The correlation of a variable with zero variance, which is undefined: the
+    result is the documented one, such as NA, or the documented error.
+
+See
+:   [](testing.qmd#sec-edges); [](design.qmd#sec-output);
+    [](design.qmd#sec-missing).
+:::
+
+
+## Generated inputs {#sec-generated}
+
+::: {.typecard}
+Definition
+:   Many inputs, produced by a program from a description of the input domain:
+    random draws, systematic grids, or the inputs of a property-based testing
+    framework, which also searches the edges and reduces a failing input to a
+    minimal one.
+
+Catches
+:   Failures on inputs that no one thought of, in rare regions of the input
+    domain and in unusual combinations of values.
+
+Misses
+:   Errors that the oracle cannot see, because an arbitrary input has no known
+    answer, and inputs outside the domain that the generator describes.
+
+Cost
+:   Moderate: describing the input domain and finding an oracle that holds for
+    every input take thought, and a test runs the code hundreds of times.
+
+Pairs with
+:   Invariants ([-@sec-invariant]), metamorphic relations
+    ([-@sec-metamorphic]), round trips ([-@sec-round-trip]), and second
+    opinions ([-@sec-second-opinion]), which need no known answer; "it runs"
+    ([-@sec-it-runs]), in a fuzz test. Known answers ([-@sec-known-answer])
+    only where a formula gives the answer for every input.
+
+Example
+:   Data frames of random size and content, generated by a property-based
+    testing framework, on which reordering the rows leaves an estimate
+    unchanged.
+
+See
+:   [](testing.qmd#sec-generated-inputs); [](testing.qmd#sec-flaky-tests), on
+    randomness in tests.
+:::
+
+
+## Simulated data {#sec-simulated}
+
+::: {.typecard}
+Definition
+:   Data drawn from the model that the method assumes, with parameters chosen
+    by the test, so that the truth behind the data is known exactly. Unlike
+    generated inputs, simulated data look like the data of an application, in
+    size and in structure.
+
+Catches
+:   Errors of the whole method on data of realistic size and structure, such as
+    bias and standard errors that are too small.
+
+Misses
+:   Failures on data that depart from the model, such as outliers, artifacts,
+    and the quirks of real files, and every error that the simulator shares
+    with the method, such as the same wrong parameterization.
+
+Cost
+:   Moderate to high: the simulator is written from the definition of the
+    model, apart from the code of the method, and studies over many simulated
+    datasets are slow.
+
+Pairs with
+:   Parameter recovery ([-@sec-recovery]), which needs it; invariants
+    ([-@sec-invariant]); end-to-end tests ([-@sec-end-to-end]) of workflows,
+    whose small dataset it can provide with a known result.
+
+Example
+:   Counts for a few hundred genes, drawn from a negative binomial distribution
+    with a known mean and dispersion for each gene.
+
+See
+:   [](testing.qmd#sec-recovery).
+:::
+
+
+## Real data {#sec-real-data}
+
+::: {.typecard}
+Definition
+:   Data from a real measurement, experiment, or collection, or an excerpt of
+    it small enough for the repository.
+
+Catches
+:   What simulated data leave out: quirks of file formats, codes for missing
+    values, unexpected identifiers, outliers, artifacts of instruments, and
+    departures from the assumptions of the model.
+
+Misses
+:   Whether the result is right, unless the data come with a known answer or a
+    ground truth. Without one, a test on real data shows only that the code
+    runs, or that its result has not changed. Where there is a truth, it is
+    often uncertain and covers only part of the data.
+
+Cost
+:   Finding data that are small, licensed for redistribution, and not
+    confidential. Larger datasets make slow tests.
+
+Pairs with
+:   Ground truth ([-@sec-ground-truth]), where the data have one; known answers
+    ([-@sec-known-answer]), where a result of the computation is certified, as
+    for the Longley data among the Statistical Reference Datasets of NIST;
+    otherwise "it runs" ([-@sec-it-runs]), snapshots ([-@sec-snapshot]),
+    invariants ([-@sec-invariant]), and metamorphic relations
+    ([-@sec-metamorphic]). With a known signal planted into them, real data
+    serve parameter recovery ([-@sec-recovery]) as well.
+
+Example
+:   A few hundred lines of a public file of weather station records, with its
+    codes for missing values and its irregular timestamps, to test the reader
+    of the format.
+
+See
+:   [](testing.qmd#sec-isolated), on licenses and confidential data.
+:::
+
+
+# Oracle: what the result is checked against {#sec-oracles}
+
+The oracle decides what a passing test shows. The first three oracles check
+only that the code runs, or compare the code with itself: they show that a
+result exists or has not changed, not that it is right. The others check the
+result against something independent of the code under test, and each sees a
+different kind of error. [](testing.qmd#sec-oracle) lists strong oracles for
+common kinds of code.
+
+
+## It runs {#sec-it-runs}
+
+::: {.typecard}
+Definition
+:   The test passes if the code finishes without an error. Its result is not
+    checked, or only its form, such as the number of output files or the shape
+    of an array.
+
+Catches
+:   Crashes, missing dependencies, broken installations, and steps that do not
+    fit together because a file is missing or has the wrong format.
+
+Misses
+:   Every wrong result that does not crash, which is the typical failure of
+    research software: the plausible, wrong number.
+
+Cost
+:   The lowest of all oracles.
+
+Pairs with
+:   End-to-end tests ([-@sec-end-to-end]) on a small hand-picked example, as a
+    smoke test, and generated inputs ([-@sec-generated]), as a fuzz test
+    (@sec-by-name). It adds little to a unit test, whose result is cheap to
+    check.
+
+Example
+:   A workflow run on a small dataset finishes and writes every output file it
+    promises.
+
+See
+:   [](design.qmd#sec-end-to-end), which asks for more than this oracle: it
+    requires checking the outputs, not only that the run finished.
+    [](documenting.qmd#sec-examples), which runs the examples of the
+    documentation with this oracle or a snapshot.
+:::
+
+
+## Snapshot {#sec-snapshot}
+
+::: {.typecard}
+Definition
+:   The result is compared with a reference output stored from an earlier run
+    of the same code. A test with this oracle is a snapshot test.
+
+Catches
+:   Silent changes, such as numbers that move after a refactoring, an update of
+    a dependency, or a new compiler. For a large output, such as a table, a
+    file, or a figure, it is often the only practical test.
+
+Misses
+:   Whether the result is right. A snapshot shows only that the result has not
+    changed, and a snapshot of a wrong result protects the error.
+
+Cost
+:   Low to create. Every intended change of the result needs a decision and an
+    update of the reference output, and a comparison bit for bit breaks on
+    every new platform.
+
+Pairs with
+:   Every scope; fixed inputs, such as hand-picked examples ([-@sec-examples])
+    and real data ([-@sec-real-data]). It shows more when the reference output
+    was checked against another oracle before it was stored.
+
+Example
+:   The table of model estimates for a reference dataset, compared within a
+    tolerance with the table stored at the last release.
+
+See
+:   [](testing.qmd#sec-snapshots); [](testing.qmd#sec-float-tests);
+    [](documenting.qmd#sec-examples), for the output shown in the
+    documentation.
+:::
+
+
+## Reproducibility {#sec-reproducibility}
+
+::: {.typecard}
+Definition
+:   The result is compared with that of another run of the same code on the
+    same input: a run with the same seed, with another number of threads or
+    processes, on another platform, or with other versions of the dependencies.
+
+Catches
+:   Hidden nondeterminism, such as an unset seed, a race condition,
+    uninitialized memory, or a dependence on global state or on the order in
+    which files are listed; and results that change across platforms or
+    versions of the dependencies by more than the tolerance.
+
+Misses
+:   Every error that is the same in each run: a wrong result, reproduced, is
+    still wrong.
+
+Cost
+:   Low: the code runs twice. A comparison across platforms needs automatic
+    test runs on each of them.
+
+Pairs with
+:   Every scope and every type of input; it matters most for stochastic and
+    parallel code.
+
+Example
+:   A Monte Carlo simulation run twice with the same seed, then on one and on
+    eight threads, with the results compared within the tolerance that defines
+    reproducibility.
+
+See
+:   [](design.qmd#sec-reproducibility); [](testing.qmd#sec-flaky-tests).
+:::
+
+
+## Known answer {#sec-known-answer}
+
+::: {.typecard}
+Definition
+:   An exact result for a particular input, obtained without the code under
+    test: an analytic solution or a limiting case, a tiny case worked out by
+    hand or with computer algebra, a certified reference value, or a published
+    value.
+
+Catches
+:   Wrong formulas, constants, signs, and conventions, on the inputs where the
+    answer is known.
+
+Misses
+:   Everything away from those inputs. Known answers exist mostly for small or
+    simple inputs, the easy corner of the input space. A reference that uses
+    another convention, such as a variance divided by $n$ rather than $n-1$,
+    raises false alarms.
+
+Cost
+:   Low when the answer is in a table, higher when it has to be derived.
+
+Pairs with
+:   Hand-picked examples ([-@sec-examples]) and edge cases ([-@sec-edges]);
+    real data ([-@sec-real-data]) with certified results; every scope.
+    Generated inputs ([-@sec-generated]) only where a formula gives the answer
+    for every input.
+
+Example
+:   The sample variance of 1, 2, 3, and 4, which is $5/3$ with the divisor
+    $n-1$ and $5/4$ with the divisor $n$.
+
+See
+:   [](testing.qmd#sec-known-answers); [](design.qmd#sec-magic-numbers).
+:::
+
+
+## Invariant {#sec-invariant}
+
+::: {.typecard}
+Definition
+:   A property that every correct result has, whatever the input, such as a
+    conservation law, a normalization, a bound, a symmetry, or a consistency
+    relation.
+
+Catches
+:   Errors that break the structure of a result: probabilities that do not sum
+    to one, a negative variance, mass that is lost, a distance matrix that is
+    not symmetric. It needs no known answer, so it can be checked on any input.
+
+Misses
+:   A wrong result that still has the property: probabilities that sum to one
+    can still be the wrong probabilities.
+
+Cost
+:   Low once the property is known, and fast to check.
+
+Pairs with
+:   Generated inputs ([-@sec-generated]), as a property-based test; simulated
+    ([-@sec-simulated]) and real data ([-@sec-real-data]); end-to-end tests
+    ([-@sec-end-to-end]), as counts and totals that every step preserves.
+
+Example
+:   In a simulation of a closed system, the total energy stays constant, within
+    the error of the integrator, over every time step.
+
+See
+:   [](testing.qmd#sec-invariants); [](design.qmd#sec-assertions), on checking
+    the same invariants on every run.
+:::
+
+
+## Metamorphic relation {#sec-metamorphic}
+
+::: {.typecard}
+Definition
+:   A relation between the results for two related inputs: the input is changed
+    in a way whose effect the method determines, and the result changes
+    accordingly. Examples are reordering, rescaling, duplicating, and splitting
+    the data, and monotonicity in a parameter.
+
+Catches
+:   Errors that leave each single result plausible, such as swapped axes,
+    identifiers misaligned after a sort, a unit converted twice, or a result
+    that depends on the order of the rows.
+
+Misses
+:   Errors that respect the relation: a constant bias survives every
+    reordering.
+
+Cost
+:   Moderate: finding relations takes knowledge of the method, and the code
+    runs twice. A relation that holds only approximately, for example because
+    reordering changes the rounding of a sum, needs a tolerance of its own.
+
+Pairs with
+:   Generated inputs ([-@sec-generated]), simulated data ([-@sec-simulated]),
+    and real data ([-@sec-real-data]), because it needs no known answer; every
+    scope.
+
+Example
+:   The coordinates of a set of points, converted from meters to kilometers:
+    their estimated spread falls by a factor of 1000, and permuting the points
+    leaves it unchanged.
+
+See
+:   [](testing.qmd#sec-metamorphic).
+:::
+
+
+## Round trip {#sec-round-trip}
+
+::: {.typecard}
+Definition
+:   An operation followed by its inverse returns the original input: a file
+    written and read back, a transform and its inverse, a unit converted and
+    converted back, a value encoded and decoded. It is a special metamorphic
+    relation ([-@sec-metamorphic]).
+
+Catches
+:   Information lost on the way, such as precision, units, identifiers, or
+    missing values; wrong encodings; and axes swapped in one of the two
+    directions.
+
+Misses
+:   Errors that the two directions share and that cancel: a transform with the
+    wrong normalization returns its input perfectly if its inverse has the
+    matching error.
+
+Cost
+:   Low where both directions exist, and fast.
+
+Pairs with
+:   Generated inputs ([-@sec-generated]) and edge cases ([-@sec-edges]), such
+    as empty tables and missing values; integration tests ([-@sec-integration])
+    across a file format; real data ([-@sec-real-data]) in that format.
+
+Example
+:   A table with missing values, units, and sample identifiers, written to the
+    package's file format, read back, and compared with the original.
+
+See
+:   [](design.qmd#sec-hand-off).
+:::
+
+
+## Second opinion {#sec-second-opinion}
+
+::: {.typecard}
+Definition
+:   The result is compared with that of an independent implementation of the
+    same method: a naive one written for the test, such as a plain loop instead
+    of vectorized code, a dense matrix instead of a sparse one, or a direct sum
+    instead of a fast transform; or an established package, possibly in another
+    language.
+
+Catches
+:   Errors of optimized code, such as wrong indices in vectorized or sparse
+    code and approximations of fast algorithms that go wrong, on every input
+    where the two implementations disagree.
+
+Misses
+:   Errors that both implementations share, because they come from the same
+    derivation, the same paper, or the same person. A disagreement shows that
+    one of the two is wrong, not which.
+
+Cost
+:   A naive implementation is quick to write but slow, so it works on small
+    inputs only. An established package adds a test dependency, and a new
+    release of it can change its numbers.
+
+Pairs with
+:   Generated inputs ([-@sec-generated]), because it provides an expected value
+    for every input; hand-picked examples ([-@sec-examples]); unit tests
+    ([-@sec-unit]).
+
+Example
+:   The product of two small random sparse matrices, compared with the product
+    of the same matrices stored as dense ones.
+
+See
+:   [](testing.qmd#sec-second-opinion).
+:::
+
+
+## Parameter recovery {#sec-recovery}
+
+::: {.typecard}
+Definition
+:   Data are simulated from the model with known parameters, the method is
+    applied to them, and the test checks that it recovers the parameters with
+    honest uncertainty: over many simulated datasets, the estimates scatter as
+    much as the reported standard errors say, and the intervals contain the
+    true values at their nominal rate, their coverage.
+
+Catches
+:   Bias, standard errors and intervals that are too narrow, tests that reject
+    too often under the null hypothesis, and failures in hard cases, such as
+    small samples, parameters at the boundary of their range, and weak signals.
+
+Misses
+:   Errors that the simulator shares with the method, and failures on data that
+    depart from the model.
+
+Cost
+:   High: an independent simulator, bounds derived from the sampling error, and
+    many replicates, which make studies of coverage slow.
+
+Pairs with
+:   Simulated data ([-@sec-simulated]), which it needs, or real data
+    ([-@sec-real-data]) with a planted signal; integration
+    ([-@sec-integration]) and end-to-end tests ([-@sec-end-to-end]).
+
+Example
+:   A thousand datasets simulated from a mixed model with known variance
+    components: the 95% intervals contain the true values in about 95% of them,
+    within the sampling error of a thousand replicates.
+
+See
+:   [](testing.qmd#sec-recovery); [](testing.qmd#sec-flaky-tests), on bounds
+    for statistical claims.
+:::
+
+
+## Ground truth {#sec-ground-truth}
+
+::: {.typecard}
+Definition
+:   The result is compared with a truth about real data that was established
+    without the method: by the design of an experiment, by an independent
+    measurement, or by expert annotation. Examples are truth sets for variant
+    calling, spike-in controls of known concentration, mock communities of
+    known composition, imaging phantoms, and annotated images. The comparison
+    is usually a summary, such as a sensitivity or an error rate within a
+    bound. A certified result of a computation is a known answer
+    ([-@sec-known-answer]) instead: it says what the computation gives, not
+    what is true.
+
+Catches
+:   Failures that only real data show, such as those caused by noise,
+    artifacts, and departures from the model, and changes in performance after
+    a change of the code.
+
+Misses
+:   Errors smaller than the uncertainty of the truth, and errors where the
+    truth is unknown; truth sets often cover only the regions where it is
+    certain. A failure may be a limit of the method rather than a bug, since a
+    correct implementation can miss the truth: the test checks the
+    implementation when its bound comes from the known performance of the
+    method, while whether the method suits the data is validation.
+
+Cost
+:   High: data with a known truth are rare, expensive to make, and often large,
+    which makes slow tests, and their license has to allow redistribution.
+
+Pairs with
+:   Real data ([-@sec-real-data]), which it needs; end-to-end tests
+    ([-@sec-end-to-end]).
+
+Example
+:   A variant caller run on a region of a reference genome with a published
+    truth set, with its sensitivity and precision compared with the values
+    published for the method.
+
+See
+:   [](testing.qmd#sec-about), on testing and validation;
+    [](testing.qmd#sec-known-answers), on tolerances derived from the precision
+    of a reference.
+:::
+
+
+## Order of convergence {#sec-convergence}
+
+::: {.typecard}
+Definition
+:   A discretization is run at a sequence of resolutions against an exact
+    solution, and the rate at which its error falls is compared with the order
+    of the method. Where no exact solution exists, the method of manufactured
+    solutions provides one. The same idea applies to Monte Carlo estimates,
+    whose error falls as $N^{-1/2}$ in the number of samples, and to iterative
+    solvers.
+
+Catches
+:   Bugs that lower the order of the method, such as a boundary condition
+    applied one step late or a wrong coefficient, which still give a small
+    error on a fine enough grid and so pass a test at one resolution.
+
+Misses
+:   Errors in terms that the exact solution does not exercise, such as a term
+    with a derivative that vanishes for the chosen solution, and errors of the
+    model itself: the right equations, solved correctly, can still be the wrong
+    physics.
+
+Cost
+:   High: several runs, some at fine resolution, at resolutions fine enough for
+    the leading term of the error to dominate and coarse enough for rounding
+    error not to.
+
+Pairs with
+:   Unit ([-@sec-unit]) and integration tests ([-@sec-integration]) of solvers,
+    quadrature rules, and finite-difference schemes, on a problem with an exact
+    or a manufactured solution.
+
+Example
+:   Halving the step of a second-order solver for an ordinary differential
+    equation with a known solution divides the error by about four.
+
+See
+:   [](testing.qmd#sec-convergence-order).
+:::
+
+
+# Tests by name {#sec-by-name}
+
+Many tests are known by a name that is not a type of its own. Some names stand
+for a combination of types, such as property-based test; others add the purpose
+a test serves or the moment it runs, such as regression test and smoke test.
+@tbl-by-name lists common ones, with the types that they usually combine and
+what the name adds. The numbers refer to the subsections of this document.
+
+Some names belong to activities that are not tests of results. Mutation testing
+and code coverage check the test suite itself ([](testing.qmd#sec-can-fail)),
+benchmarks measure performance ([](design.qmd#sec-size-matters)), and
+validation asks whether the method fits the scientific question, which no test
+can answer ([](testing.qmd#sec-about)).
+
+| Name | Scope | Inputs | Oracle | What the name adds |
+|---------------|-------------|---------------|----------------|-----------------------------------------|
+| Benchmark problem | End-to-end ([-@sec-end-to-end]) | A standard problem of the field ([-@sec-examples]) | Known answer ([-@sec-known-answer]), or the results of other codes ([-@sec-second-opinion]) | A problem that a community agreed on, such as a shock tube in fluid dynamics, so that codes can be compared. Not a benchmark of performance. |
+| Doc test | Unit ([-@sec-unit]) | The example in the documentation ([-@sec-examples]) | Its printed output, as a snapshot ([-@sec-snapshot]), or it runs ([-@sec-it-runs]) | Keeps the examples of the documentation working: doctest in Python compares their printed output, and R CMD check runs the examples of an R package. |
+| Fuzz test | Unit or end-to-end | Generated ([-@sec-generated]), often malformed | It runs ([-@sec-it-runs]), or the documented error | Searches for inputs that crash the code or slip past its validation; runs for hours, apart from the test suite. |
+| Golden master, characterization test, approval test | End-to-end ([-@sec-end-to-end]) | Hand-picked examples ([-@sec-examples]) or real data ([-@sec-real-data]) | Snapshot ([-@sec-snapshot]) | Records the behavior of existing code, often before code without tests is changed. In an approval test, a person approves each new reference output. |
+| Gradient check | Unit ([-@sec-unit]) | Hand-picked or generated points ([-@sec-generated]) | Second opinion ([-@sec-second-opinion]): finite differences | Checks a derivative, coded by hand or computed by automatic differentiation, against finite differences of the function. |
+| Manufactured solution | Unit or integration ([-@sec-integration]) | A problem built from a chosen solution | Order of convergence ([-@sec-convergence]) | Provides an exact solution where none is known: the chosen function, inserted into the equations, gives the source terms that it requires. |
+| Property-based test | Unit ([-@sec-unit]) | Generated ([-@sec-generated]) | Invariant ([-@sec-invariant]), metamorphic relation ([-@sec-metamorphic]), or round trip ([-@sec-round-trip]) | A framework, such as Hypothesis for Python or quickcheck for R, generates the inputs, searches the edges, and reduces a failing input to a minimal one. |
+| Regression test | Any | The input that exposed a bug | Any; often a known answer ([-@sec-known-answer]) | Added when a bug is fixed, so that the bug cannot return unnoticed. Some communities also call snapshot tests regression tests. |
+| Simulation study | Integration or end-to-end | Simulated data ([-@sec-simulated]), many datasets | Parameter recovery ([-@sec-recovery]) | Measures bias and coverage over many simulated datasets; slow, so it runs apart from the fast tests. Its coverage is that of intervals, not of code. |
+| Smoke test | End-to-end ([-@sec-end-to-end]) | A small hand-picked example ([-@sec-examples]) | It runs ([-@sec-it-runs]) | Runs first, after a build, an installation, or a change of environment, to decide whether the other tests are worth running. |
+
+: Common names of tests, with the types that they usually combine. {#tbl-by-name}

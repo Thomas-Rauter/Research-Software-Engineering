@@ -1,0 +1,62 @@
+% The preamble of the PDFs, after Quarto's own: the look of the former LaTeX
+% documents, and the environments of the custom blocks. _quarto.yml sets the
+% class, the paper, the fonts, and the colors of the links.
+
+\definecolor{myblue}{RGB}{0, 51, 153}
+
+\usepackage{etoolbox}
+\usepackage{enumitem}
+
+\widowpenalty=10000
+\clubpenalty=10000
+
+% Headings and contents in blue.
+\usepackage{sectsty}
+\partfont{\color{myblue}}
+\sectionfont{\color{myblue}}
+\subsectionfont{\color{myblue}}
+\subsubsectionfont{\color{myblue}}
+
+\usepackage{titlesec}
+\titlespacing*{\section}{0pt}{2.5ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+\titlespacing*{\subsection}{0pt}{2ex plus 0.8ex minus .2ex}{1.2ex plus .2ex}
+\titlespacing*{\subsubsection}{0pt}{1.8ex plus 0.6ex minus .2ex}{1ex plus .2ex}
+
+\usepackage{tocloft}
+\setlength{\cftbeforesecskip}{2pt}
+\setlength{\cftbeforesubsecskip}{1pt}
+\renewcommand{\cftpartfont}{\large\bfseries\color{myblue}}
+\renewcommand{\cftsecfont}{\bfseries\color{myblue}}
+\renewcommand{\cftsubsecfont}{\color{myblue}}
+\renewcommand{\cftsecpagefont}{\bfseries}
+\renewcommand{\cftsubsecpagefont}{}
+
+% The title in bold, the date below it, and a rule after the contents.
+\makeatletter
+\renewcommand{\@maketitle}{%
+  \begin{center}%
+    {\LARGE\bfseries \@title \par}%
+    \vskip 2em%
+    {\large \@date}%
+  \end{center}%
+  \par\vskip 2em}
+\makeatother
+\let\OriginalTableOfContents\tableofcontents
+\renewcommand{\tableofcontents}{%
+  \OriginalTableOfContents\vspace{1em}\hrule\vspace{1em}}
+
+% Tables in small type.
+\AtBeginEnvironment{longtable}{\small}
+
+% ::: {.definitionbox}: a formal definition.
+\usepackage{tcolorbox}
+\newtcolorbox{definitionbox}{colback=myblue!6, colframe=myblue, boxrule=0pt,
+  leftrule=3pt, sharp corners, left=8pt, right=8pt, top=5pt, bottom=5pt,
+  before skip=6pt, after skip=10pt}
+
+% ::: {.typecard}: the fields of a type of test, as a list with the names of
+% the fields in the margin.
+\newenvironment{typecard}
+  {\setlist[description]{style=multiline, leftmargin=6.5em,
+     font=\normalfont\bfseries, topsep=2pt, itemsep=2pt, parsep=0pt}}
+  {}

@@ -1,0 +1,27 @@
+---
+title: Tools
+format: html
+number-sections: false
+---
+
+How to use the tools that research software is run, stored, tracked, and served
+with, whatever the language it is written in. The documents are organized by
+job, not by tool, so that the tools that do the same job can be compared, and a
+document outlives a change of tool. Planned are:
+
+| Job | Tools |
+|-----|-------|
+| Containers | Apptainer, Docker |
+| Workflow managers | Nextflow, Snakemake |
+| HPC scheduling | Slurm |
+| Cloud computing | AWS |
+| Data formats and storage | Parquet, HDF5, Zarr |
+| Experiment tracking | MLflow |
+| Services | FastAPI |
+| Version control and continuous integration | Git, GitHub Actions |
+
+Like a language document, a tool document mixes rules, which carry the
+[normative language](../principles/design.qmd#sec-normative) of *Design
+Principles* and apply its principles, with reference to look up while working.
+Tools change faster than principles and languages, so each document says which
+versions of the tools it was last checked against.

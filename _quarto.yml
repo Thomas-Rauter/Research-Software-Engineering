@@ -1,0 +1,72 @@
+# The website, and a PDF of every document. `make site` renders both into
+# _site/; build/README.md explains the build, and AGENTS.md the structure.
+
+project:
+  type: website
+  # Only Quarto documents are pages; README.md and AGENTS.md are not.
+  render:
+    - "*.qmd"
+
+website:
+  title: Research Software Engineering
+  site-url: https://thomas-rauter.github.io/Research-Software-Engineering/
+  repo-url: https://github.com/Thomas-Rauter/Research-Software-Engineering
+  favicon: favicon.svg
+  navbar:
+    left:
+      - text: Principles
+        href: principles/index.qmd
+      - text: Languages
+        href: languages/index.qmd
+      - text: Tools
+        href: tools/index.qmd
+    right:
+      - icon: github
+        href: https://github.com/Thomas-Rauter/Research-Software-Engineering
+        aria-label: Source on GitHub
+  # Each part lists its pages in the order of their `order` field.
+  sidebar:
+    - title: Principles
+      contents: principles
+    - title: Languages
+      contents: languages
+    - title: Tools
+      contents: tools
+
+# Documents number their sections; the overview pages turn this off.
+number-sections: true
+
+filters:
+  - filters/refs.lua
+
+# Every page is rendered to HTML and, unless it sets `format: html`, to PDF.
+format:
+  html:
+    theme:
+      light: [flatly, style/site.scss, style/light.scss]
+      dark: [darkly, style/site.scss, style/dark.scss]
+    toc: true
+    toc-depth: 2
+    toc-title: On this page
+    respect-user-color-scheme: true
+  pdf:
+    documentclass: article
+    papersize: a4
+    fontsize: 11pt
+    geometry: margin=2.5cm
+    pdf-engine: lualatex
+    mainfont: STIX Two Text
+    mathfont: STIX Two Math
+    include-in-header: style/header.tex
+    toc: true
+    toc-depth: 2
+    toc-title: Contents
+    colorlinks: true
+    linkcolor: myblue
+    urlcolor: myblue
+    citecolor: myblue
+    toccolor: myblue
+    date: today
+    date-format: long
+    # The image has the full TeX Live; a missing package is an error.
+    latex-auto-install: false

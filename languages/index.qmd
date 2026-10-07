@@ -1,0 +1,18 @@
+---
+title: Languages
+format: html
+number-sections: false
+---
+
+How to write research software in one programming language. Each language gets
+one document, which covers the language and its own tooling, such as its
+package manager and environments, its test framework, its linters, and its
+documentation tools. Planned are Python, R, SQL, and Bash.
+
+A language document mixes rules and reference. Its rules, such as that every
+user-facing function in Python has a docstring, carry the meaning of the
+[normative language](../principles/design.qmd#sec-normative) of *Design
+Principles*, and they apply its principles to the language: each rule cites
+the principle it applies rather than restating it. The reference describes
+what is useful to look up while working, such as the syntax of common
+operations.

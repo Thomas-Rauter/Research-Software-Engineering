@@ -1,23 +1,15 @@
-# `make pdf` keeps auxiliary files inside the container. These patterns cover
-# builds run outside Docker.
-*.aux
-*.bbl
-*.bcf
-*.blg
-*.fdb_latexmk
-*.fls
-*.lof
-*.log
-*.lot
-*.nav
-*.out
-*.run.xml
-*.snm
-*.synctex.gz
-*.toc
-*.xdv
-/latex/*.pdf
-
-# Local preview of the website
+# The rendered website and Quarto's cache, from `make site` and
+# `make preview`. The GitHub Action renders and publishes the site.
 /_site/
-/.jekyll-cache/
+/.quarto/
+
+# Intermediate files of a PDF render run outside `make site`.
+*.aux
+*.log
+*.toc
+*.out
+*_files/
+/*/*.tex
+!/style/*.tex
+
+**/*.quarto_ipynb

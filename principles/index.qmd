@@ -1,0 +1,25 @@
+---
+title: Principles
+format: html
+number-sections: false
+listing:
+  contents: "*.qmd"
+  type: grid
+  grid-columns: 2
+  max-description-length: 1000
+  sort: order
+  fields: [title, description]
+---
+
+The principles hold for research software in any programming language and
+scientific field, whatever tools it uses. Most are general software engineering
+principles, stated and motivated for a setting where the typical failure is not
+a crash but a plausible, wrong number. A smaller set is specific to research
+software, such as numerical stability, units and axis conventions, missing
+values, and reproducibility.
+
+[](design.qmd) is the main document. The guides to testing and to documenting
+stand beside it, and the three form one set of guidelines, with the normative
+language, the ladder, and the terminology of *Design Principles*.
+[](test-types.qmd) defines the terms of testing for all of them. The languages
+and the tools apply these principles and cite them.

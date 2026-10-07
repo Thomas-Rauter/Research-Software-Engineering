@@ -1,0 +1,79 @@
+/*-- scss:rules --*/
+
+// The rules for both color schemes. $primary is the blue of the scheme.
+
+// Headings of sections and subsections, smaller than the title.
+main.content h1:not(.title) {
+  margin-top: 2.5rem;
+  font-size: 1.8rem;
+}
+main.content h2 {
+  font-size: 1.4rem;
+}
+
+// The description of a page feeds the listings, the metadata of the page,
+// and the search. The page itself starts with its own introduction.
+#title-block-header .description {
+  display: none;
+}
+
+// A part of a document, such as "Part I: All code" in Design Principles.
+main.content h1.part {
+  margin-top: 3.5rem;
+  font-size: 2.1rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 2px solid $primary;
+}
+h1.part .part-number {
+  display: block;
+  font-size: 0.55em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+#TOC a[href^="#part-"] {
+  font-weight: bold;
+}
+#TOC .part-number::after {
+  content: ":";
+}
+
+// ::: {.definitionbox}: a formal definition.
+.definitionbox {
+  margin: 1rem 0 1.25rem;
+  padding: 0.6rem 1rem;
+  border-left: 3px solid $primary;
+  background-color: rgba($primary, 0.07);
+  > :last-child {
+    margin-bottom: 0;
+  }
+}
+
+// ::: {.typecard}: the names of the fields beside their text.
+.typecard dl {
+  display: grid;
+  grid-template-columns: 6.5em 1fr;
+  column-gap: 1rem;
+  dt {
+    grid-column: 1;
+  }
+  dd {
+    grid-column: 2;
+    margin-bottom: 0.4rem;
+  }
+}
+@media (max-width: 575.98px) {
+  .typecard dl {
+    display: block;
+  }
+}
+
+// ::: {.glance}: the rows of parts and sections, whose last cell is empty,
+// set off from the rows of the principles.
+.glance tr:has(> td:last-child:empty) > td {
+  padding-top: 1rem;
+  border-bottom-color: $primary;
+  font-weight: 700;
+}
+.glance a {
+  text-decoration: none;
+}
