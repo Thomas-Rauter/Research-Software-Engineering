@@ -1,4 +1,4 @@
-# Research Software Guidelines
+# Research Software Engineering
 
 <!--
 This file is the landing page of the website. Give every document in latex/

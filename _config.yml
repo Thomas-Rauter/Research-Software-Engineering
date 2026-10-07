@@ -2,7 +2,7 @@
 # becomes the landing page, and the PDFs are served from pdf/.
 
 # Keep equal to the first heading of README.md, or the theme shows both.
-title: Research Software Guidelines
+title: Research Software Engineering
 
 # Publish only the landing page, the PDFs, and the favicon.
 exclude:
