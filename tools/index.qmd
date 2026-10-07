@@ -7,11 +7,13 @@ number-sections: false
 How to use the tools that research software is run, stored, tracked, and served
 with, whatever the language it is written in. The documents are organized by
 job, not by tool, so that the tools that do the same job can be compared, and a
-document outlives a change of tool. Planned are:
+document outlives a change of tool. Each job has a document that compares its
+tools and states the rules that hold for all of them, and each tool a document
+of its own. A job or a tool without a link has no document yet.
 
 | Job | Tools |
 |-----|-------|
-| Containers | Apptainer, Docker |
+| [Containers](containers/index.qmd) | [Apptainer](containers/apptainer.qmd), Docker |
 | Workflow managers | Nextflow, Snakemake |
 | HPC scheduling | Slurm |
 | Cloud computing | AWS |

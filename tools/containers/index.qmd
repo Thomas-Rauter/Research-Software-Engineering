@@ -1,0 +1,84 @@
+---
+title: Containers
+description: >-
+  Container images package a program with everything it runs on. Which tool to
+  use where, Apptainer on clusters and Docker elsewhere, and the rules for
+  images that hold whatever tool builds them.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: Containers
+---
+
+# About this document {#sec-about .unnumbered}
+
+A container image packs a program together with the operating system files,
+libraries, and tools it runs on, so that it runs the same on a laptop, a
+cluster, and in the cloud. For workflow code, an image is the usual way to pin
+the environment of a step. This document says which tool to use where and
+states the rules that hold for every image; the documents of the tools say
+how. Its rules use the
+[normative language](../../principles/design.qmd#sec-normative) of *Design
+Principles*.
+
+|  | [Apptainer](apptainer.qmd) | Docker |
+|------------|-----------------------------|-----------------------------|
+| Runs as | The user, without root rights and without a daemon | A daemon with root rights |
+| Where | HPC clusters and other shared Linux machines | Laptops, servers, continuous integration, the cloud |
+| Image | One read-only SIF file | Layers in a local store or a registry |
+| By default | Shares the home directory, the current directory, and the environment with the host | Isolated; shares only what is mounted |
+
+Clusters allow Apptainer and rarely Docker, because the daemon of Docker gives
+its users root rights on the machine. The two work together: Apptainer runs
+images from Docker registries, so an image can be built with Docker, for
+example in continuous integration, pushed to a registry, and run with
+Apptainer on the cluster.
+
+The principles already state the core of working with images: workflow code
+runs every step in an image identified by its digest, together with the file
+that builds it ([](../../principles/design.qmd#sec-pin)), and keeps that file,
+and the image of a publication as well
+([](../../principles/design.qmd#sec-recipe)). The rules below add what follows
+from them for every image.
+
+
+# At a glance {#sec-at-a-glance .unnumbered}
+
+Every rule of this document in one line. The number and the title link to the
+rule.
+
+::: {.glance}
+| No. | Rule | In one line |
+|-----|------------------------------|----------------------------------------------------|
+| [-@sec-pin] | [](#sec-pin) | Name the base image by its digest, and install packages with exact versions. |
+| [-@sec-record] | [](#sec-record) | Record the digest or the checksum of the image with every result. |
+:::
+
+
+# Rules {#sec-rules}
+
+
+## Pin the base by digest, the packages by version {#sec-pin}
+
+A recipe should name its base image by its digest, such as
+`python:3.12-slim@sha256:…`, and install its packages with exact versions, for
+example from a lock file. A tag such as `3.12-slim` or `latest` moves to a new
+image with every update, and a package installed without a version is the
+newest one: the same recipe then builds a different image next month, and
+nothing shows it. With everything pinned, rebuilding gives the same software,
+and an update is a change of the recipe that can be reviewed and tested.
+
+Packages of the operating system, installed with `apt-get` or `dnf`, can often
+not be pinned, because their archives keep only the newest versions. The image
+itself is then the record of what was installed, which is one more reason to
+keep the image that produced published results.
+
+
+## Record the image with every result {#sec-record}
+
+A result should record the image that produced it: the digest of a Docker
+image, or the checksum of an Apptainer image file, such as the output of
+`sha256sum analysis.sif`, next to the version of the code and the parameters
+([](../../principles/design.qmd#sec-traceability)). A tag or a file name does
+not identify an image, because both can point to another image tomorrow.

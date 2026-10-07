@@ -1,0 +1,269 @@
+---
+title: Apptainer
+description: >-
+  How to build and run containers with Apptainer, the container system of HPC
+  clusters: the rules that keep the host out of the results, and the commands,
+  the definition file, and the use on a cluster to look up.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: Apptainer
+---
+
+# About this document {#sec-about .unnumbered}
+
+Apptainer runs containers on HPC clusters and other shared Linux machines. It
+runs them as the user who starts them, without root rights and without a
+daemon, which is why clusters allow it. It was called Singularity until 2021;
+SingularityCE continues Singularity separately, with mostly the same commands.
+[](index.qmd) says when to use Apptainer and states the rules that hold for
+every image; this document adds what is specific to Apptainer. Its rules use
+the [normative language](../../principles/design.qmd#sec-normative) of
+*Design Principles*.
+
+Checked against Apptainer 1.5.4.
+
+
+# At a glance {#sec-at-a-glance .unnumbered}
+
+Every rule of this document in one line. The number and the title link to the
+rule.
+
+::: {.glance}
+| No. | Rule | In one line |
+|-----|------------------------------|----------------------------------------------------|
+| [-@sec-host] | [](#sec-host) | Run steps with `--containall`, so that neither the environment nor the home directory of the host reaches the container. |
+| [-@sec-binds] | [](#sec-binds) | Bind only the paths a step uses, and its inputs read-only. |
+| [-@sec-sandbox] | [](#sec-sandbox) | Try things out in a sandbox, but build every image you use from its definition file. |
+| [-@sec-test] | [](#sec-test) | Give every definition file a `%test` section that checks that the image is complete. |
+| [-@sec-cache] | [](#sec-cache) | Point the cache and the temporary files of Apptainer away from the home directory. |
+:::
+
+
+# Rules {#sec-rules}
+
+
+## Leave the host at the door {#sec-host}
+
+Every step of a workflow should run with `--containall`, or with both
+`--cleanenv` and `--no-home`, so that nothing of the host reaches the container
+that the step does not declare. By default, Apptainer shares much of the host
+with the container: every environment variable, the home directory, the current
+directory, and `/tmp`. A step then depends not only on its image but also on
+who runs it.
+
+Two leaks are common, and each option stops only one of them. Python puts the
+packages that the user installed with `pip install --user` into the home
+directory and loads them before those of the image, and only `--no-home` keeps
+them out. A `PYTHONPATH` or an `R_LIBS_USER` set on the host does the same, and
+only `--cleanenv` keeps it out. Either way, the step computes with versions
+that no lock file records, on one account and not on another: an undeclared
+input ([](../../principles/design.qmd#sec-declared-inputs)) that defeats the
+pinning of the image ([](../../principles/design.qmd#sec-pin)).
+
+`--containall` implies both, and isolates processes as well; inside, the home
+directory is empty and the current directory is not bound. Pass what a step
+needs explicitly: data with `--bind` (@sec-binds), and variables with
+`--env NAME=value` or `--env-file`. Interactive work may keep the defaults.
+
+
+## Bind what a step needs, read-only what it reads {#sec-binds}
+
+A step should bind only the directories it reads and writes, and its inputs
+read-only, with `--bind source:destination:ro`. A step that sees only its
+declared inputs fails loudly when it reaches for anything else, instead of
+reading a file that nobody declared
+([](../../principles/design.qmd#sec-declared-inputs)), and an input bound
+read-only cannot be changed by mistake
+([](../../principles/design.qmd#sec-mutation)).
+
+Bind to fixed paths inside the container, such as `/data` and `/results`, not
+to the paths of the host: the commands inside the container are then the same
+on every machine, and only the binds change.
+
+
+## Develop in a sandbox, release from the definition file {#sec-sandbox}
+
+Every image that computes results should be built from its definition file.
+A sandbox, an image as a writable directory made with
+`apptainer build --sandbox`, is the place to find out what an image needs:
+install and try things in it with `apptainer shell --writable`, then write each
+step that worked into the definition file. An image converted from a sandbox
+that was changed by hand has no recipe
+([](../../principles/design.qmd#sec-recipe)): `apptainer inspect --deffile`
+then shows only `bootstrap: localimage`, and nobody can rebuild, fix, or
+update it.
+
+
+## Test the image where it is built {#sec-test}
+
+Every definition file should have a `%test` section that starts the main
+programs of the image, for example by importing the packages of the analysis
+and printing the version of each tool. Apptainer runs it at the end of every
+build and fails the build if it fails, so an incomplete image is never
+written; `apptainer test` runs it again on another machine. Its oracle is
+"[it runs](../../principles/test-types.qmd#sec-it-runs)": it shows that the
+image is complete, not that its results are right, which is the job of the
+tests of the code and of the workflow
+([](../../principles/design.qmd#sec-end-to-end)).
+
+
+## Keep the cache off your home directory {#sec-cache}
+
+On a cluster, set `APPTAINER_CACHEDIR` and `APPTAINER_TMPDIR` to a scratch or
+project directory, for example in `~/.bashrc`. Apptainer keeps every image it
+pulls in a cache, `~/.apptainer/cache` by default, and unpacks images for a
+build in `/tmp`. Both grow by gigabytes, while the home directories and `/tmp`
+of clusters are small, and a full quota makes later jobs fail with errors far
+from the cause. `apptainer cache list` shows the cache, and
+`apptainer cache clean` empties it.
+
+
+# How Apptainer works {#sec-concepts}
+
+An *image* is a single file in the Singularity Image Format (SIF), such as
+`analysis.sif`: a compressed, read-only file system that holds the operating
+system files, the libraries, and the programs, with metadata such as the
+definition file it was built from and its labels. Copying the file copies the
+whole environment, and its checksum identifies it. A *container* is a program
+running in an image; it ends when the program ends.
+
+Apptainer builds an image from a definition file (@sec-definition-file), or
+converts one from a registry such as Docker Hub, squashing its layers into one
+file. A *sandbox* is an image as a writable directory, for development
+(@sec-sandbox).
+
+Inside the container, the user is the same as outside, with the same rights: a
+container cannot do anything its user cannot. By default, Apptainer binds the
+home directory, the current directory, and `/tmp` of the host, passes every
+environment variable, and shares the network, so that a container behaves much
+like a program on the host (@sec-host). The image itself is read-only: a
+program that writes into it fails and has to write into a bound directory
+instead.
+
+
+# Commands {#sec-commands}
+
+| Command | Does |
+|------------------------------------------|------------------------------------------|
+| `apptainer pull out.sif docker://image@sha256:…` | Downloads an image from a registry and converts it into a SIF file |
+| `apptainer build out.sif recipe.def` | Builds an image from a definition file; add `--fakeroot` if the build needs root rights |
+| `apptainer exec image.sif command …` | Runs a command in the image |
+| `apptainer run image.sif …` | Runs the `%runscript` of the image with the arguments |
+| `apptainer shell image.sif` | Opens an interactive shell in the image |
+| `apptainer test image.sif` | Runs the `%test` section of the image |
+| `apptainer inspect --deffile image.sif` | Shows the definition file the image was built from; `--labels` shows its labels |
+| `apptainer instance start image.sif name` | Runs the image in the background as a service; `instance list` and `instance stop name` |
+| `apptainer cache list`, `apptainer cache clean` | Shows and empties the cache |
+
+The options of `exec`, `run`, and `shell`:
+
+| Option | Does |
+|------------------------------------------|------------------------------------------|
+| `--bind src:dest:ro` | Binds the host path `src` to `dest` in the container; `ro` read-only, `rw` the default; several separated by commas |
+| `--containall` | Isolates the file systems, the environment, and the processes; binds neither the home nor the current directory |
+| `--cleanenv` | Passes no environment variables of the host |
+| `--no-home` | Does not bind the home directory |
+| `--env NAME=value`, `--env-file file` | Passes the given environment variables, also with `--cleanenv` |
+| `--pwd dir` | Starts in the directory `dir` inside the container |
+| `--nv`, `--rocm` | Makes the GPUs of NVIDIA or AMD available (@sec-cluster) |
+| `--writable-tmpfs` | Lets programs write into the image, in memory, until the container ends |
+
+A typical step of a workflow, isolated from the host, with its input read-only:
+
+```bash
+apptainer exec --containall \
+    --bind /scratch/project/data:/data:ro \
+    --bind /scratch/project/results:/results \
+    --pwd /results --env OMP_NUM_THREADS=8 \
+    analysis.sif python /opt/analysis/run.py --input /data/samples.csv
+```
+
+
+# A definition file {#sec-definition-file}
+
+A definition file, such as `analysis.def`, is the recipe of an image. Build it
+with `apptainer build analysis.sif analysis.def` in the directory that holds
+the files it copies.
+
+```default
+Bootstrap: docker
+From: python:3.12-slim@sha256:<digest>
+
+%files
+    requirements.txt /opt/requirements.txt
+    src /opt/analysis
+
+%post
+    pip install --no-cache-dir -r /opt/requirements.txt
+
+%environment
+    export LC_ALL=C.UTF-8
+    export PYTHONNOUSERSITE=1
+
+%runscript
+    exec python /opt/analysis/run.py "$@"
+
+%test
+    python -c "import numpy; print('numpy', numpy.__version__)"
+    python -c "import pandas; print('pandas', pandas.__version__)"
+
+%labels
+    org.opencontainers.image.source https://github.com/lab/analysis
+    org.opencontainers.image.version 1.2.0
+```
+
+- **`Bootstrap` and `From`** name the base image, here one from Docker Hub,
+  pinned by its digest ([](index.qmd#sec-pin)). The registry shows the digest,
+  and so does `skopeo inspect docker://python:3.12-slim`.
+- **`%files`** copies files and directories from the host into the image,
+  before `%post` runs.
+- **`%post`** runs once, during the build, as root inside the image: install
+  the software here, with exact versions, such as from a `requirements.txt`
+  that pins every package with `==`.
+- **`%environment`** sets environment variables whenever the image runs.
+  `PYTHONNOUSERSITE=1` keeps the packages of the user's home directory out even
+  when the home directory is bound (@sec-host).
+- **`%runscript`** is what `apptainer run` does.
+- **`%test`** checks the image at the end of the build (@sec-test).
+- **`%labels`** stores metadata, which `apptainer inspect --labels` shows.
+
+
+# On a cluster {#sec-cluster}
+
+**Slurm.** A job runs Apptainer like any other program, and Slurm grants the
+resources:
+
+```bash
+#!/bin/bash
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
+#SBATCH --time=02:00:00
+
+srun apptainer exec --containall \
+    --bind "$SCRATCH/data:/data:ro" --bind "$SCRATCH/results:/results" \
+    --env OMP_NUM_THREADS="$SLURM_CPUS_PER_TASK" \
+    analysis.sif python /opt/analysis/run.py --input /data/samples.csv
+```
+
+Workflow managers, such as Nextflow and Snakemake, start each step in its
+image themselves; pass the options of @sec-host through their settings for
+extra options of Apptainer.
+
+**GPUs.** `--nv` makes the NVIDIA GPUs that the job was granted available in
+the container, together with the driver of the host; the CUDA version in the
+image must be one that this driver supports. `--rocm` does the same for AMD.
+
+**MPI.** In the usual hybrid model, the MPI of the host starts the processes,
+with `srun` or `mpirun`, and each runs in the container; the MPI library in the
+image must be compatible with that of the host, which in practice means the
+same implementation and a compatible version. The documentation of the cluster
+says which MPI to put into the image.
+
+**Building.** Many clusters let users build images only with `--fakeroot`, or
+not at all. Build where you can, on a Linux machine, in a virtual machine on
+macOS or Windows, or in continuous integration, and copy the SIF file to the
+cluster, or push the image to a registry and pull it there. Build for the
+processor architecture of the cluster: an image built on an ARM machine, such
+as a Mac with Apple silicon, does not run on an x86 cluster.

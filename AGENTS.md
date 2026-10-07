@@ -79,7 +79,8 @@ consistency, and tightening the prose.
 ## Files
 
 - `principles/`, `languages/`, and `tools/` hold the documents of the three
-  parts, one `.qmd` file each, and the source of truth. All edits go here,
+  parts, one `.qmd` file each, and the source of truth; `tools/` has a
+  folder per job. All edits go here,
   for example to `principles/design.qmd`, `principles/testing.qmd`,
   `principles/documenting.qmd`, or `principles/test-types.qmd`. Figures go
   into `figures/` beside the document, as SVG, which serves the website and
@@ -267,15 +268,26 @@ shorter name gives it as `short-title`, as *Design Principles* does.
 
 ## Structure of the languages and the tools
 
-No documents exist yet in these two parts; this is the structure they were
-planned with.
+The first documents are `tools/containers/index.qmd` and
+`tools/containers/apptainer.qmd`; follow them.
 
-- One document per language in `languages/`, and one per job in `tools/`,
-  such as `tools/containers.qmd`, which compares the tools of that job,
-  such as Apptainer and Docker. The sidebar and the overview page of a part
-  list its documents by `order`. When the first document of a part is
-  added, give the overview page of the part the same `listing` as
-  `principles/index.qmd`; an empty listing fails the build with a warning.
+- One document per language in `languages/`, such as
+  `languages/python.qmd`. When the first one is added, give
+  `languages/index.qmd` the same `listing` as `principles/index.qmd`; an
+  empty listing fails the build with a warning, which is why it has none yet.
+- In `tools/`, one folder per job, such as `tools/containers/`, with a
+  document for the job, `index.qmd`, and one for each tool, such as
+  `apptainer.qmd`. The job document compares the tools of the job and states
+  the rules that hold for all of them; a tool document states only what is
+  specific to its tool and cites the job document for the rest. The PDFs are
+  named after the job and the tool, such as `Containers.pdf` and
+  `Apptainer.pdf`. `tools/index.qmd` lists the
+  jobs and their tools in a table, linked where a document exists; add the
+  links when you add a document. The sidebar lists the documents of a folder
+  by `order`.
+- The documents of the two parts are short and meant for looking things up,
+  so "At a glance" follows the front matter without a page break and lists
+  only the rules, without rows for sections.
 - A document mixes rules and reference. Rules are what a reader must or
   should do, such as that every user-facing function in Python has a
   docstring; they use the normative language of *Design Principles* and
@@ -292,7 +304,10 @@ planned with.
   every language, it may belong in *Design Principles* instead.
 - Code examples are welcome here, unlike in the testing and documentation
   guides, as fenced code blocks with the language named, so that they are
-  highlighted and can be copied.
+  highlighted and can be copied. For a language the highlighter does not
+  know, such as an Apptainer definition file, name it `default`: without a
+  language, a block gets no copy button. Keep lines of code within about 80
+  columns, or they run past the margin of the PDF.
 - Tools change faster than principles and languages, so each tool document
   states the versions of the tools it was last checked against, and each
   language document the version of the language.
