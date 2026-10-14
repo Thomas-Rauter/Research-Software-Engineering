@@ -32,8 +32,9 @@ consequences show up far away, in a result reported with the wrong method. Two
 ideas run through this guide. Readers come to documentation with different
 needs, and each kind of document serves one (@sec-what). And documentation
 stays true only if it lives, changes, and is checked together with the code
-(@sec-true). @sec-writing is about how much to write, which examples to choose,
-and how to write the reference, the comments, the changelog, and the citation.
+(@sec-true). @sec-writing is about the order of a text, how much to write,
+which examples to choose, and how to write the reference, the comments, the
+changelog, and the citation.
 
 What has to be documented belongs to *Design Principles*, because it is part of
 what the software promises. Its principles require, among other things, the
@@ -104,6 +105,7 @@ principle.
 | [-@sec-readme] | [](#sec-readme) | Say what the software does, its status, how to install, run, and cite it, and where to go next. |
 | [-@sec-paper] | [](#sec-paper) | Cite the paper, but document the method as the current version implements it, and every difference. |
 | **[-@sec-writing]** | **[](#sec-writing)** | |
+| [-@sec-forest] | [](#sec-forest) | Start with what matters most, in plain words, and go into the details after it; simplify, but do not falsify. |
 | [-@sec-no-shorter] | [](#sec-no-shorter) | Shorten by structure and by cutting what no reader needs, never by leaving out what a reader would have to guess. |
 | [-@sec-plain-examples] | [](#sec-plain-examples) | Use examples that need no more knowledge than the software itself, preferably with an answer the reader can check. |
 | [-@sec-reference] | [](#sec-reference) | Write the reference in the source, next to the code it describes, and generate it from there. |
@@ -226,6 +228,38 @@ that version available.
 # Writing documentation {#sec-writing}
 
 
+## The forest before the trees {#sec-forest}
+
+Documentation should start with the big picture and go into the details after
+it: what something does and why, in plain words, before how exactly. A reader
+who knows where a text is going can place each detail as it comes, and a reader
+who needs only the big picture can stop early. Journalism calls this order the
+inverted pyramid: the most important first, and the rest in descending order.
+
+Each kind of document has its own form of this order (@sec-diataxis). The
+reference of a function starts with a summary of what it computes, before its
+parameters and notes; a tutorial or a how-to guide says what the reader will
+have at the end, and what they need, before the first step; and the explanation
+of a method gives the intuition before the formalism. The explanation needs it
+most, because the documentation of a method often starts with its equations, as
+a paper does, and the reader cannot tell what the method does until they have
+worked through them. Intuition also guides choices that a formula does not:
+"a larger bandwidth smooths more" tells a reader how to choose a bandwidth, and
+a Kalman filter described first as a weighted average of the prediction and the
+measurement, each weighted by how much it is trusted, makes the equations that
+follow readable.
+
+Two limits apply. First, simplify, but do not falsify: readers who stop after
+the opening act on it, so it may leave out details, but it should not state
+anything that the details contradict. "Estimates the variance", followed by the
+divisor $n-1$, is a simplification; "returns the mean", for a function that
+ignores missing values, is false from the first sentence, however correct the
+details below it (@sec-no-shorter). Second, the most important includes what
+can make a result wrong. A caveat about one parameter belongs at that parameter
+(@sec-no-shorter), but an assumption of the whole function, such as evenly
+spaced samples, belongs at its top, not in the notes at the end.
+
+
 ## As short as possible, but no shorter {#sec-no-shorter}
 
 Documentation should leave out what no reader needs, but never what a reader
@@ -255,9 +289,9 @@ Length has costs of its own, which is why the documentation should still be as
 short as possible. A caveat buried in a long text is missed by the reader who
 skims, and every sentence is one more to keep true (Subsections [-@sec-grow]
 and [-@sec-timeless]). The conflict can usually be resolved by structure rather
-than by cutting: start with a summary of a sentence or two and put the details
-below it; state each caveat where the reader acts on it, at the parameter or
-the step it concerns, not paragraphs away; and put each detail into the
+than by cutting: put the summary first and the details below it (@sec-forest);
+state each caveat where the reader acts on it, at the parameter or the step it
+concerns, not paragraphs away; and put each detail into the
 document whose purpose it serves, with a link to it (@sec-diataxis). What a
 reader needs depends on that purpose: a tutorial that leaves out options is not
 wrong, but one that leaves out a step is. The README is short in this way, by
