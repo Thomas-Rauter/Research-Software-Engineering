@@ -112,6 +112,7 @@ principle.
 | **[-@sec-true]** | **[](#sec-true)** | |
 | [-@sec-docs-as-code] | [](#sec-docs-as-code) | Keep the documentation in the repository, change it with the code, build it on every change, and publish it per version. |
 | [-@sec-examples] | [](#sec-examples) | Run every example on every change, and check the output it shows. |
+| [-@sec-timeless] | [](#sec-timeless) | Write what stays true without upkeep: take facts of the code from the code, and date what holds only at a moment. |
 :::
 
 
@@ -393,3 +394,38 @@ package or are generated from a fixed seed. Where an example needs real data
 that are too large to ship, download them from an archive with a persistent
 identifier, check them against a stored checksum, and keep a copy for the
 build, so that the documentation does not break when a server moves.
+
+
+## Documentation should age like wine, not like milk {#sec-timeless}
+
+Write documentation that stays true without being updated. Every statement
+that goes out of date has to be found and rewritten, again and again: at best,
+this costs effort that is missing elsewhere; at worst, the update is forgotten,
+and the outdated statement stays and misleads or confuses its readers
+(@sec-grow). Two kinds of statements go sour. Some restate a fact of the code
+by hand, such as the version of the package in an installation command, the
+version of a dependency it requires, or "the four available solvers", and need
+an update with every release that changes it. Others depend on the day they are
+read, such as "currently", "new", "soon", "the latest version", "not yet
+supported", or "the fastest method available", and go out of date without any
+change to the code, so neither the review of a change nor the build of the
+documentation is a reminder to update them. Google's developer documentation
+style guide calls documentation free of them timeless.
+
+Take facts of the code from the code: generate version numbers, requirements,
+and lists of choices from the package metadata and the source when the
+documentation is built ([](#sec-reference); [](design.qmd#sec-dry)), or leave
+them out where the reader does not need them. A version number that records
+history is not the problem: "added in version 2.3" and "version 1.4 reproduces
+the analysis of the paper" (@sec-paper) stay true, while "the current version
+2.3" does not. Where a statement holds only at a moment, say which, as a
+comparison with other tools does by naming their versions and its date. News
+belongs in the changelog, where every entry carries its version and date
+(@sec-changelog), and plans belong in the issue tracker. Point to what lasts: a
+DOI rather than the address of a lab's website, a tagged release rather than a
+branch, and the issue tracker rather than a colleague who may leave the group.
+
+What ages like wine is the explanation: the method, its assumptions, and the
+reasons for the design (@sec-comments). It needs the least upkeep, and its
+value grows as the memory of the authors fades. Spend the words there, and keep what
+changes fast short, generated, or dated.
