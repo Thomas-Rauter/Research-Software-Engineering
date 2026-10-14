@@ -32,8 +32,8 @@ consequences show up far away, in a result reported with the wrong method. Two
 ideas run through this guide. Readers come to documentation with different
 needs, and each kind of document serves one (@sec-what). And documentation
 stays true only if it lives, changes, and is checked together with the code
-(@sec-true). @sec-writing is about how much to write, and about writing the
-reference, the comments, the changelog, and the citation.
+(@sec-true). @sec-writing is about how much to write, which examples to choose,
+and how to write the reference, the comments, the changelog, and the citation.
 
 What has to be documented belongs to *Design Principles*, because it is part of
 what the software promises. Its principles require, among other things, the
@@ -105,6 +105,7 @@ principle.
 | [-@sec-paper] | [](#sec-paper) | Cite the paper, but document the method as the current version implements it, and every difference. |
 | **[-@sec-writing]** | **[](#sec-writing)** | |
 | [-@sec-no-shorter] | [](#sec-no-shorter) | Shorten by structure and by cutting what no reader needs, never by leaving out what a reader would have to guess. |
+| [-@sec-plain-examples] | [](#sec-plain-examples) | Use examples that need no more knowledge than the software itself, preferably with an answer the reader can check. |
 | [-@sec-reference] | [](#sec-reference) | Write the reference in the source, next to the code it describes, and generate it from there. |
 | [-@sec-workflow-docs] | [](#sec-workflow-docs) | Document every configuration key, every input and output file, and the resources a run needs. |
 | [-@sec-comments] | [](#sec-comments) | Explain reasons, sources, and conventions in comments, and record design decisions in the repository. |
@@ -265,6 +266,41 @@ the document needs: a repetition of the signature or of another document
 ([](design.qmd#sec-dry)), history, which belongs in the changelog
 (@sec-changelog), and details of the implementation
 ([](design.qmd#sec-document-method)).
+
+
+## Show the software, not your field {#sec-plain-examples}
+
+An example in the documentation should need no more knowledge than the software
+it shows. The example of a function that computes a Fourier transform may
+assume that the reader knows Fourier transforms, but not seismology; that of a
+sequence aligner may assume biology, but not the annotation conventions of one
+organism or one lab. The common mistake is to take the author's own research
+problem as the example, with their data, the terms of their subfield, and lines
+of setup before the call. The reader then has to learn the field and the
+software at once, and cannot tell which lines show the software and which the
+science. Many readers come from elsewhere: libraries for numerics, statistics,
+or file formats are used in many fields, methods travel between fields, and
+research software engineers often maintain code outside their own.
+
+Prefer examples whose answer the reader can see, such as the integral of
+$\sin x$ from 0 to $\pi$, which is 2, or the spectrum of a sine of 5 Hz, which
+peaks at 5 Hz ([](test-types.qmd#sec-known-answer);
+[](test-types.qmd#sec-recovery)). Such an example shows how to call the software
+and also that it computes what it promises, and readers, who take the output of
+an example as the right answer (@sec-examples), can check it without knowing
+the field. The output of an example from the author's field is usually a number
+that nobody outside it can check. Plain does not mean stripped of conventions:
+an example should still show the units, axes, and missing values that the
+software cares about ([](design.qmd#sec-conventions)), because plain numbers
+for a temperature in kelvin hide the convention that matters most.
+
+The rule binds the reference and the minimal example of the README most, where
+readers come to see what a call looks like. A tutorial may take a complete
+analysis from the field of the package if it explains the field as it goes,
+and how-to guides and explanations are often tied to a field by their purpose
+(@sec-diataxis). The driving applications kept as runnable examples
+([](design.qmd#sec-applications)) belong there, or in a gallery of examples,
+rather than in the reference.
 
 
 ## The reference lives next to the code {#sec-reference}
