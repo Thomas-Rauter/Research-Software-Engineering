@@ -32,8 +32,8 @@ consequences show up far away, in a result reported with the wrong method. Two
 ideas run through this guide. Readers come to documentation with different
 needs, and each kind of document serves one (@sec-what). And documentation
 stays true only if it lives, changes, and is checked together with the code
-(@sec-true). @sec-writing is about writing the reference, the comments, the
-changelog, and the citation.
+(@sec-true). @sec-writing is about how much to write, and about writing the
+reference, the comments, the changelog, and the citation.
 
 What has to be documented belongs to *Design Principles*, because it is part of
 what the software promises. Its principles require, among other things, the
@@ -104,6 +104,7 @@ principle.
 | [-@sec-readme] | [](#sec-readme) | Say what the software does, its status, how to install, run, and cite it, and where to go next. |
 | [-@sec-paper] | [](#sec-paper) | Cite the paper, but document the method as the current version implements it, and every difference. |
 | **[-@sec-writing]** | **[](#sec-writing)** | |
+| [-@sec-no-shorter] | [](#sec-no-shorter) | Shorten by structure and by cutting what no reader needs, never by leaving out what a reader would have to guess. |
 | [-@sec-reference] | [](#sec-reference) | Write the reference in the source, next to the code it describes, and generate it from there. |
 | [-@sec-workflow-docs] | [](#sec-workflow-docs) | Document every configuration key, every input and output file, and the resources a run needs. |
 | [-@sec-comments] | [](#sec-comments) | Explain reasons, sources, and conventions in comments, and record design decisions in the repository. |
@@ -222,6 +223,48 @@ that version available.
 
 
 # Writing documentation {#sec-writing}
+
+
+## As short as possible, but no shorter {#sec-no-shorter}
+
+Documentation should leave out what no reader needs, but never what a reader
+would otherwise have to guess, where a plausible guess could give a wrong
+result: whether a variance divides by $n$ or by $n-1$, along which axis a
+function reduces, the unit of an angle, whether a bound is inclusive, or
+whether a test is one-sided. What the documentation must state is set by
+[](design.qmd#sec-document-method); none of it, and no other detail of this
+kind, should be cut to keep a text short. When brevity and such a detail
+conflict, keep the detail.
+
+The two costs are not symmetric, for the same reason as in
+[](design.qmd#sec-loud). A sentence too many costs the reader a moment, and
+they notice it. A detail too few costs nothing visible: readers fill the gap
+with an assumption, and a result computed or reported under a wrong assumption
+looks like any other. Shortening also tends to simplify, and a simplified
+statement is often not incomplete but false: "returns the mean" for a function
+that ignores missing values, "removes outliers" for one that removes values
+more than three median absolute deviations from the median of their column,
+"the p-value" for a one-sided one. Correctness ranks above clarity
+([](design.qmd#sec-quality)), so a text that is easy to read but wrong has
+failed. This holds for every reader, including tools that answer questions from
+the documentation: they do not tire of long texts, but they too fill a gap with
+a guess.
+
+Length has costs of its own, which is why the documentation should still be as
+short as possible. A caveat buried in a long text is missed by the reader who
+skims, and every sentence is one more to keep true (Subsections [-@sec-grow]
+and [-@sec-timeless]). The conflict can usually be resolved by structure rather
+than by cutting: start with a summary of a sentence or two and put the details
+below it; state each caveat where the reader acts on it, at the parameter or
+the step it concerns, not paragraphs away; and put each detail into the
+document whose purpose it serves, with a link to it (@sec-diataxis). What a
+reader needs depends on that purpose: a tutorial that leaves out options is not
+wrong, but one that leaves out a step is. The README is short in this way, by
+pointing to the rest (@sec-readme). What should be cut is what no reader of
+the document needs: a repetition of the signature or of another document
+([](design.qmd#sec-dry)), history, which belongs in the changelog
+(@sec-changelog), and details of the implementation
+([](design.qmd#sec-document-method)).
 
 
 ## The reference lives next to the code {#sec-reference}
