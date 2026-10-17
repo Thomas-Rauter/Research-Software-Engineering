@@ -13,13 +13,18 @@ format:
 
 # About this document {#sec-about .unnumbered}
 
-Working with Apptainer comes down to two steps. An image is built from a
-definition file (@sec-definition-file), or pulled from a registry
-(@sec-images), and programs then run in the image (@sec-running), on a cluster
-usually in a job (@sec-cluster). This document covers what research software
-engineers need for these steps regularly. Anything rarer, such as MPI,
-overlays, or encrypted images, is in the
-[user guide of Apptainer](https://apptainer.org/docs/user/latest/).
+Apptainer has three concepts. A definition file is the recipe of an
+image (@sec-definition-file). An image is a single file, built from a
+definition file or pulled from a registry (@sec-images). A container is a
+program running in an image (@sec-running). Working with Apptainer comes down
+to two steps: build or pull the image, then run programs in it, on a cluster
+usually in a Slurm job (@sec-slurm). The commands of the two steps are few; the
+work lies in the definition file, so this document starts with how one is put
+together.
+
+This document covers what research software engineers need for these steps
+regularly. Anything rarer, such as MPI, overlays, or encrypted images, is in
+the [user guide of Apptainer](https://apptainer.org/docs/user/latest/).
 [](index.qmd) says when to use Apptainer and states the rules that hold for
 every image.
 
@@ -32,12 +37,13 @@ Checked against Apptainer 1.5.4.
 
 # Definition files {#sec-definition-file}
 
-A definition file, such as `analysis.def`, is the recipe of an image: a header
-that names the base image to start from, and sections that say what to copy
-into it, how to install the software, and how the image behaves when it runs.
-Every build runs the whole file from the start, so try things out in a sandbox
-first (@sec-sandbox). Keep the definition file in the repository of the code
-it packages ([](../../principles/design.qmd#sec-recipe)).
+A definition file, such as `analysis.def`, is the recipe of an image. It has
+two parts: a header that names the base image to start from (@sec-header), and
+sections that say what to copy into it, how to install the software, and how
+the image behaves when it runs (@sec-sections). Every build runs the whole file
+from the start, so try things out in a sandbox first (@sec-sandbox). Keep the
+definition file in the repository of the code it packages
+([](../../principles/design.qmd#sec-recipe)).
 
 ```default
 Bootstrap: docker
@@ -66,23 +72,123 @@ From: python:3.12-slim@sha256:<digest>
     org.opencontainers.image.version 1.2.0
 ```
 
-- **`Bootstrap` and `From`** name the base image: `Bootstrap: docker` takes it
-  from a registry, here Docker Hub, and `Bootstrap: localimage` from a SIF
-  file. Pin it by its digest ([](index.qmd#sec-pin)); the registry shows the
-  digest, and so does `skopeo inspect docker://python:3.12-slim`.
-- **`%files`** copies files and directories from the host into the image,
-  before `%post` runs. Build in the directory that holds the definition file
-  and the files it copies.
-- **`%post`** runs once, during the build, as root inside the image: install
-  the software here, with exact versions, such as from a `requirements.txt`
-  that pins every package with `==`.
-- **`%environment`** sets environment variables whenever the image runs, but
-  not during the build: a variable that `%post` needs is set in `%post`.
-  `PYTHONNOUSERSITE=1` keeps the packages in the user's home directory out
-  even when the home directory is bound (@sec-host).
-- **`%runscript`** is what `apptainer run` does.
-- **`%test`** runs at the end of the build (see below).
-- **`%labels`** stores metadata, which `apptainer inspect --labels` shows.
+The header comes first and ends at the first section. A section starts with
+its name on a line of its own, such as `%post`, and its body is the lines
+below it, usually indented, up to the next section (@sec-section-body). `#`
+starts a comment.
+
+
+## The header {#sec-header}
+
+The header is a list of `Keyword: value` lines, and most definition files need
+only the first two:
+
+| Keyword | Says |
+|--------------|----------------------------------------------------------------|
+| `Bootstrap` | Where the base image comes from: `docker` from a registry of container images, `localimage` from a SIF file on the machine. Always the first line. |
+| `From` | Which image: `python:3.12-slim@sha256:<digest>` from Docker Hub, `quay.io/lab/analysis@sha256:<digest>` from another registry, or the path of a SIF file |
+| `Stage` | The name of the stage, in a build with several (@sec-stages) |
+
+Pin the base image by its digest ([](index.qmd#sec-pin)); the registry shows
+the digest, and so does `skopeo inspect docker://python:3.12-slim`. Other
+bootstrap agents, such as `oras` for a SIF file in an OCI registry and
+`debootstrap` for building Debian or Ubuntu from its packages, are in the user
+guide.
+
+
+## The sections {#sec-sections}
+
+Each section is used at its own time, whatever its place in the file: during
+the build, each time the image runs, or never, because it only stores
+something in the image.
+
+<!-- Quarto prints {{{ name }}} as {{ name }}, and {{ name }} as { name }. -->
+
+| Section | Used | Body |
+|----------------|------------------------------|----------------------------------------------------|
+| `%arguments` | Before the build, which replaces each `{{{ name }}}` in the file by its value | `name=value` lines with the defaults, which `apptainer build --build-arg name=value` overrides |
+| `%setup` | During the build, on the host | A shell script; `$APPTAINER_ROOTFS` is the directory of the image |
+| `%files` | During the build, before `%post` | One line per file or directory: its path on the host, then its path in the image |
+| `%post` | During the build, in the image, as root | A shell script that installs the software |
+| `%test` | At the end of the build, and with `apptainer test` | A shell script that checks the image (@sec-test) |
+| `%environment` | Each time the image runs, before the program starts | A shell script that sets variables with `export` |
+| `%runscript` | With `apptainer run` | A shell script that starts the program |
+| `%startscript` | With `apptainer instance start` | A shell script that starts a service in the background |
+| `%labels` | Stored, shown by `apptainer inspect --labels` | One `name value` line per label; the name ends at the first space |
+| `%help` | Stored, shown by `apptainer run-help` | Text |
+
+Most images need only the sections of the example. `%setup` runs on the host,
+as root when the build runs with `sudo`, and can change the host; `%files` is
+the safe way to put files into the image. The `%app` sections, which put
+several programs with their own run scripts into one image, are in the user
+guide.
+
+
+## The body of a section {#sec-section-body}
+
+Most sections hold a shell script, and each has its own pitfalls:
+
+- **The shell** need not be bash, so write the scripts for `sh`, or name
+  another shell: `%post -c /bin/bash`, and for `%runscript` and `%test` a first
+  line `#!/bin/bash`.
+- **`%post`** runs in a clean environment: the variables of the host do not
+  reach it, and those of `%environment` are not set yet. A variable that
+  `%post` needs is set in `%post`. A value that only `%post` knows, such as the
+  directory an installer chose, it appends as an `export` line to the file
+  `$APPTAINER_ENVIRONMENT`, which every run reads, like `%environment`. Install
+  the software with exact versions, such as from a `requirements.txt` that pins
+  every package with `==`.
+- **`%environment`** sets variables whenever the image runs, but not during the
+  build. `PYTHONNOUSERSITE=1` keeps the packages in the user's home directory
+  out even when the home directory is bound (@sec-host).
+- **`%runscript`** starts the program with `exec` and passes on the arguments
+  with `"$@"`, as in the example, so that the arguments of `apptainer run`
+  reach the program and the program takes the place of the shell.
+- **`%files`** copies before `%post` runs. Build in the directory that holds
+  the definition file and the files it copies.
+
+
+## Stages {#sec-stages}
+
+A definition file may hold several stages, one after the other, each with a
+header of its own that names it with `Stage`. Only the last stage becomes the
+image; an earlier stage passes files on with `%files from` and its name. A
+build can so compile a program in a stage with the compilers and copy only the
+program into a final stage that holds what it needs to run:
+
+```default
+Bootstrap: docker
+From: debian:12-slim@sha256:<digest>
+Stage: build
+
+%files
+    src /opt/src
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends gfortran make
+    cd /opt/src && make
+
+Bootstrap: docker
+From: debian:12-slim@sha256:<digest>
+Stage: final
+
+%files from build
+    /opt/src/simulate /usr/local/bin/simulate
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends libgfortran5
+    rm -rf /var/lib/apt/lists/*
+
+%runscript
+    exec simulate "$@"
+```
+
+The compilers, the sources, and everything else of the first stage stay out of
+the image, which is smaller for it. The final stage installs only the libraries
+that the program loads at run time, here the runtime library of Fortran.
+
+
+## Test that the image is complete {#sec-test}
 
 Give every definition file a `%test` section that starts the main programs of
 the image, for example by importing the packages of the analysis and printing
@@ -113,9 +219,10 @@ apptainer build analysis.sif analysis.def
 `--fakeroot`, which makes them root inside the build without giving them any
 rights outside it. Many clusters allow building only this way, or not at all.
 Build where you can, on a Linux machine, in a virtual machine on macOS or
-Windows, or in continuous integration, and copy the SIF file to the cluster.
-Build for the processor architecture of the cluster: an image built on an ARM
-machine, such as a Mac with Apple silicon, does not run on an x86 cluster.
+Windows, or in continuous integration, and copy the SIF file to the cluster,
+where it lives, like the data, on a scratch or project file system. Build for
+the processor architecture of the cluster: an image built on an ARM machine,
+such as a Mac with Apple silicon, does not run on an x86 cluster.
 
 
 ## Pull an image {#sec-pull}
@@ -165,16 +272,33 @@ holds even when its source is lost. For R, `Rscript -e 'sessionInfo()'` lists
 the packages instead of `pip list`.
 
 
-# Running an image {#sec-running}
+## Keep the cache off your home directory {#sec-cache}
 
-A program runs in an image with `apptainer exec`, `run`, or `shell`. It sees
-the files of the image instead of those of the host, apart from the
-directories that Apptainer binds in (@sec-binds), and it runs as the same user
-as outside, with the same rights. When the program ends, nothing is left
-behind, so there is nothing to start, stop, or clean up around a run.
-Apptainer calls a program running in an image a *container*; its own
-documentation often uses the word for the image file as well. The image is
-read-only, so a program writes its results into a bound directory of the host.
+```bash
+export APPTAINER_CACHEDIR="$SCRATCH/apptainer/cache"
+export APPTAINER_TMPDIR="$SCRATCH/apptainer/tmp"
+mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
+```
+
+Apptainer keeps every image it pulls in a cache, `~/.apptainer/cache` by
+default, and unpacks images for a build in `/tmp`. Both grow by gigabytes,
+while the home directories and `/tmp` of clusters are small, and a full quota
+makes later jobs fail with errors far from the cause. Put the lines above into
+`~/.bashrc`, with the scratch or project directory of your cluster.
+`apptainer cache list` shows the cache, and `apptainer cache clean` empties it.
+
+
+# Containers {#sec-running}
+
+A container is a program running in an image, started with `apptainer exec`,
+`run`, or `shell`. It sees the files of the image instead of those of the host,
+apart from the directories that Apptainer binds in (@sec-binds), and it runs as
+the same user as outside, with the same rights. When the program ends, nothing
+is left behind, so there is nothing to start, stop, or clean up around a run.
+The image is read-only, so a program writes its results into a bound directory
+of the host. The documentation of Apptainer often uses *container* for the
+image file as well, and calls a container that runs in the background, such as
+a database, an *instance*.
 
 
 ## Run a program {#sec-run}
@@ -185,8 +309,9 @@ apptainer run analysis.sif --input data.csv   # its %runscript
 apptainer shell analysis.sif                  # an interactive shell
 ```
 
-The options go between the command and the image, and are the same for
-`exec`, `run`, and `shell`:
+For an image pulled from Docker, `apptainer run` runs the `ENTRYPOINT` and
+`CMD` of the Docker image. The options go between the command and the image,
+and are the same for `exec`, `run`, and `shell`:
 
 | Option | Does |
 |----------------------------|--------------------------------------------------------|
@@ -256,13 +381,6 @@ the CUDA version in the image must be one that this driver supports;
 for AMD.
 
 
-# On a cluster {#sec-cluster}
-
-On many clusters, Apptainer is a module, which `module load apptainer` loads,
-in a job script as well. Build the images elsewhere (@sec-build), and keep
-them, like the data, on a scratch or project file system.
-
-
 ## Run in a Slurm job {#sec-slurm}
 
 ```bash
@@ -280,29 +398,14 @@ srun apptainer exec --containall \
     python /opt/analysis/run.py --input /data/samples.csv
 ```
 
-A job runs Apptainer like any other program, and Slurm grants the resources.
-The variables of Slurm do not reach a container started with `--containall`
-(@sec-host), so pass what the program needs with `--env`, such as the number of
-threads; the shell of the job expands `$SLURM_CPUS_PER_TASK` before Apptainer
-starts.
+A job runs Apptainer like any other program, and Slurm grants the resources. On
+many clusters, Apptainer is a module, which the job script loads with
+`module load apptainer`. The variables of Slurm do not reach a container
+started with `--containall` (@sec-host), so pass what the program needs with
+`--env`, such as the number of threads; the shell of the job expands
+`$SLURM_CPUS_PER_TASK` before Apptainer starts.
 
 Workflow managers, such as Nextflow and Snakemake, start each step in its image
 themselves. Give them the options of @sec-host through their settings for
 Apptainer, `apptainer.runOptions` in Nextflow and `--apptainer-args` in
 Snakemake.
-
-
-## Keep the cache off your home directory {#sec-cache}
-
-```bash
-export APPTAINER_CACHEDIR="$SCRATCH/apptainer/cache"
-export APPTAINER_TMPDIR="$SCRATCH/apptainer/tmp"
-mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
-```
-
-Apptainer keeps every image it pulls in a cache, `~/.apptainer/cache` by
-default, and unpacks images for a build in `/tmp`. Both grow by gigabytes,
-while the home directories and `/tmp` of clusters are small, and a full quota
-makes later jobs fail with errors far from the cause. Put the lines above into
-`~/.bashrc`, with the scratch or project directory of your cluster.
-`apptainer cache list` shows the cache, and `apptainer cache clean` empties it.
