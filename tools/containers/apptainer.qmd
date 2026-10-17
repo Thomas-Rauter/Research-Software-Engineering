@@ -38,17 +38,24 @@ Checked against Apptainer 1.5.4.
 # Definition files {#sec-definition-file}
 
 A definition file, such as `analysis.def`, is the recipe of an image. It has
-two parts: a header that names the base image to start from (@sec-header), and
-sections that say what to copy into it, how to install the software, and how
-the image behaves when it runs (@sec-sections). Every build runs the whole file
-from the start, so try things out in a sandbox first (@sec-sandbox). Keep the
+two parts: a header, which names the base image to start from (@sec-header),
+and sections, which say what to add to it. A section starts with its keyword on
+a line of its own, such as `%post`, and its body is the lines below it, up to
+the next section. Sections are of two types. Build-time sections run once, when
+the image is built, and decide what the image holds (@sec-build-sections).
+Run-time sections are stored in the image and run whenever a container starts
+from it, and decide what the container does (@sec-run-sections). `%labels` and
+`%help` are of neither type: they only store metadata in the image. Keep the
 definition file in the repository of the code it packages
 ([](../../principles/design.qmd#sec-recipe)).
 
 ```default
+# The header: one keyword and its value per line.
 Bootstrap: docker
 From: python:3.12-slim@sha256:<digest>
 
+# Build-time sections, which run once, when the image is built.
+# Each is a keyword, such as %files, and the body below it.
 %files
     requirements.txt /opt/requirements.txt
     src /opt/analysis
@@ -56,6 +63,11 @@ From: python:3.12-slim@sha256:<digest>
 %post
     pip install --no-cache-dir -r /opt/requirements.txt
 
+%test
+    python -c "import numpy; print('numpy', numpy.__version__)"
+    python -c "import pandas; print('pandas', pandas.__version__)"
+
+# Run-time sections, which run whenever a container starts.
 %environment
     export LC_ALL=C.UTF-8
     export PYTHONNOUSERSITE=1
@@ -63,98 +75,57 @@ From: python:3.12-slim@sha256:<digest>
 %runscript
     exec python /opt/analysis/run.py "$@"
 
-%test
-    python -c "import numpy; print('numpy', numpy.__version__)"
-    python -c "import pandas; print('pandas', pandas.__version__)"
-
+# Metadata, only stored in the image: one name and value per line.
 %labels
     org.opencontainers.image.source https://github.com/lab/analysis
     org.opencontainers.image.version 1.2.0
 ```
 
-The header comes first and ends at the first section. A section starts with
-its name on a line of its own, such as `%post`, and its body is the lines
-below it, usually indented, up to the next section (@sec-section-body). `#`
-starts a comment.
-
 
 ## The header {#sec-header}
 
-The header is a list of `Keyword: value` lines, and most definition files need
-only the first two:
+The header is a list of keywords, each followed by its value on the same line:
 
-| Keyword | Says |
-|--------------|----------------------------------------------------------------|
-| `Bootstrap` | Where the base image comes from: `docker` from a registry of container images, `localimage` from a SIF file on the machine. Always the first line. |
-| `From` | Which image: `python:3.12-slim@sha256:<digest>` from Docker Hub, `quay.io/lab/analysis@sha256:<digest>` from another registry, or the path of a SIF file |
-| `Stage` | The name of the stage, in a build with several (@sec-stages) |
-
-Pin the base image by its digest ([](index.qmd#sec-pin)); the registry shows
-the digest, and so does `skopeo inspect docker://python:3.12-slim`. Other
-bootstrap agents, such as `oras` for a SIF file in an OCI registry and
-`debootstrap` for building Debian or Ubuntu from its packages, are in the user
-guide.
+| Keyword | Value |
+|----------------|----------------------------------------------------------------|
+| `Bootstrap` | Where the base image comes from: `docker` from a registry of container images, such as Docker Hub, `localimage` from a SIF file. Always the first keyword. |
+| `From` | The base image, such as `python:3.12-slim@sha256:<digest>`, pinned by its digest ([](index.qmd#sec-pin)), or the path of a SIF file |
+| `Stage` | The name of the stage, in a definition file with several (@sec-stages) |
 
 
-## The sections {#sec-sections}
+## Build-time sections {#sec-build-sections}
 
-Each section is used at its own time, whatever its place in the file: during
-the build, each time the image runs, or never, because it only stores
-something in the image.
+Build-time sections run once, in this order, when the image is built. The body
+of `%files` is a list of paths, and those of `%post` and `%test` are shell
+scripts, which run in the image:
 
-<!-- Quarto prints {{{ name }}} as {{ name }}, and {{ name }} as { name }. -->
-
-| Section | Used | Body |
-|----------------|------------------------------|----------------------------------------------------|
-| `%arguments` | Before the build, which replaces each `{{{ name }}}` in the file by its value | `name=value` lines with the defaults, which `apptainer build --build-arg name=value` overrides |
-| `%setup` | During the build, on the host | A shell script; `$APPTAINER_ROOTFS` is the directory of the image |
-| `%files` | During the build, before `%post` | One line per file or directory: its path on the host, then its path in the image |
-| `%post` | During the build, in the image, as root | A shell script that installs the software |
-| `%test` | At the end of the build, and with `apptainer test` | A shell script that checks the image (@sec-test) |
-| `%environment` | Each time the image runs, before the program starts | A shell script that sets variables with `export` |
-| `%runscript` | With `apptainer run` | A shell script that starts the program |
-| `%startscript` | With `apptainer instance start` | A shell script that starts a service in the background |
-| `%labels` | Stored, shown by `apptainer inspect --labels` | One `name value` line per label; the name ends at the first space |
-| `%help` | Stored, shown by `apptainer run-help` | Text |
-
-Most images need only the sections of the example. `%setup` runs on the host,
-as root when the build runs with `sudo`, and can change the host; `%files` is
-the safe way to put files into the image. The `%app` sections, which put
-several programs with their own run scripts into one image, are in the user
-guide.
+| Keyword | Body |
+|----------------|----------------------------------------------------------------|
+| `%files` | One line per file or directory to copy into the image: its path on the host, then its path in the image |
+| `%post` | A shell script that installs the software, run as root |
+| `%test` | A shell script that checks the image at the end of the build, and again whenever `apptainer test` runs it |
 
 
-## The body of a section {#sec-section-body}
+## Run-time sections {#sec-run-sections}
 
-Most sections hold a shell script, and each has its own pitfalls:
+Run-time sections are only stored when the image is built, and run when a
+container starts, so the variables that `%environment` sets exist in every
+container, but not during the build. Their bodies are shell scripts, which run
+in the container:
 
-- **The shell** need not be bash, so write the scripts for `sh`, or name
-  another shell: `%post -c /bin/bash`, and for `%runscript` and `%test` a first
-  line `#!/bin/bash`.
-- **`%post`** runs in a clean environment: the variables of the host do not
-  reach it, and those of `%environment` are not set yet. A variable that
-  `%post` needs is set in `%post`. A value that only `%post` knows, such as the
-  directory an installer chose, it appends as an `export` line to the file
-  `$APPTAINER_ENVIRONMENT`, which every run reads, like `%environment`. Install
-  the software with exact versions, such as from a `requirements.txt` that pins
-  every package with `==`.
-- **`%environment`** sets variables whenever the image runs, but not during the
-  build. `PYTHONNOUSERSITE=1` keeps the packages in the user's home directory
-  out even when the home directory is bound (@sec-host).
-- **`%runscript`** starts the program with `exec` and passes on the arguments
-  with `"$@"`, as in the example, so that the arguments of `apptainer run`
-  reach the program and the program takes the place of the shell.
-- **`%files`** copies before `%post` runs. Build in the directory that holds
-  the definition file and the files it copies.
+| Keyword | Body |
+|----------------|----------------------------------------------------------------|
+| `%environment` | A shell script that sets variables with `export`, run in every container before its program |
+| `%runscript` | A shell script that starts the program, run by `apptainer run`, which passes its arguments on as `"$@"` |
 
 
 ## Stages {#sec-stages}
 
 A definition file may hold several stages, one after the other, each with a
-header of its own that names it with `Stage`. Only the last stage becomes the
-image; an earlier stage passes files on with `%files from` and its name. A
-build can so compile a program in a stage with the compilers and copy only the
-program into a final stage that holds what it needs to run:
+header and sections of its own and named by `Stage`. A stage takes files from
+an earlier one with `%files from` and its name, and only the last stage becomes
+the image. A program can so be compiled in one stage, with the compilers, and
+copied into a last stage that holds only what the program needs to run:
 
 ```default
 Bootstrap: docker
@@ -165,7 +136,7 @@ Stage: build
     src /opt/src
 
 %post
-    apt-get update && apt-get install -y --no-install-recommends gfortran make
+    apt-get update && apt-get install -y gfortran make
     cd /opt/src && make
 
 Bootstrap: docker
@@ -176,27 +147,11 @@ Stage: final
     /opt/src/simulate /usr/local/bin/simulate
 
 %post
-    apt-get update && apt-get install -y --no-install-recommends libgfortran5
-    rm -rf /var/lib/apt/lists/*
+    apt-get update && apt-get install -y libgfortran5
 
 %runscript
     exec simulate "$@"
 ```
-
-The compilers, the sources, and everything else of the first stage stay out of
-the image, which is smaller for it. The final stage installs only the libraries
-that the program loads at run time, here the runtime library of Fortran.
-
-
-## Test that the image is complete {#sec-test}
-
-Give every definition file a `%test` section that starts the main programs of
-the image, for example by importing the packages of the analysis and printing
-their versions. A failing test stops the build, so an incomplete image is never
-written, and `apptainer test analysis.sif` runs the test again on another
-machine. It shows that the image is complete, not that its results are right
-([it runs](../../principles/test-types.qmd#sec-it-runs)); that is the job of
-the tests of the code.
 
 
 # Images {#sec-images}
@@ -235,8 +190,7 @@ apptainer pull python.sif docker://python:3.12-slim@sha256:<digest>
 file. `docker://` reaches Docker Hub and the other registries of container
 images, such as `docker://quay.io/lab/analysis` or
 `docker://ghcr.io/lab/analysis`. Name the image by its digest, as in a
-definition file ([](index.qmd#sec-pin)). Every pulled image also lands in the
-cache (@sec-cache).
+definition file ([](index.qmd#sec-pin)).
 
 
 ## Try things out in a sandbox {#sec-sandbox}
@@ -270,22 +224,6 @@ sha256sum analysis.sif                     # its checksum
 An image carries the definition file it was built from, so it tells what it
 holds even when its source is lost. For R, `Rscript -e 'sessionInfo()'` lists
 the packages instead of `pip list`.
-
-
-## Keep the cache off your home directory {#sec-cache}
-
-```bash
-export APPTAINER_CACHEDIR="$SCRATCH/apptainer/cache"
-export APPTAINER_TMPDIR="$SCRATCH/apptainer/tmp"
-mkdir -p "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
-```
-
-Apptainer keeps every image it pulls in a cache, `~/.apptainer/cache` by
-default, and unpacks images for a build in `/tmp`. Both grow by gigabytes,
-while the home directories and `/tmp` of clusters are small, and a full quota
-makes later jobs fail with errors far from the cause. Put the lines above into
-`~/.bashrc`, with the scratch or project directory of your cluster.
-`apptainer cache list` shows the cache, and `apptainer cache clean` empties it.
 
 
 # Containers {#sec-running}

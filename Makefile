@@ -43,8 +43,14 @@ site:
 	    cp -r _site/. /out/'
 	@echo "Rendered into _site/."
 
+# Quarto records the process ID of a preview in .quarto/preview/lock and
+# kills that process when the next preview starts. Every preview runs in a
+# new container, where the IDs repeat, so the next preview would kill itself:
+# the lock is removed first. A preview still running keeps its port, and
+# Docker refuses to start another on it.
 preview:
 	@docker image inspect $(IMAGE) >/dev/null 2>&1 || $(MAKE) --no-print-directory image
+	@rm -f .quarto/preview/lock
 	$(DOCKER_RUN) --interactive --tty --publish $(PORT):$(PORT) \
 	  --volume "$(CURDIR):/work" --workdir /work \
 	  $(IMAGE) quarto preview --host 0.0.0.0 --port $(PORT) --no-browser
