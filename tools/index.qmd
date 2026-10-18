@@ -13,7 +13,7 @@ of its own. A job or a tool without a link has no document yet.
 
 | Job | Tools |
 |-----|-------|
-| [Containers](containers/index.qmd) | [Apptainer](containers/apptainer.qmd), Docker |
+| [Containers](containers/index.qmd) | [Apptainer](containers/apptainer.qmd), [Docker](containers/docker.qmd) |
 | Workflow managers | Nextflow, Snakemake |
 | HPC scheduling | Slurm |
 | Cloud computing | AWS |

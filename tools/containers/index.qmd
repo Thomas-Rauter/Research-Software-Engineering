@@ -22,7 +22,7 @@ how. Its rules use the
 [normative language](../../principles/design.qmd#sec-normative) of *Design
 Principles*.
 
-|  | [Apptainer](apptainer.qmd) | Docker |
+|  | [Apptainer](apptainer.qmd) | [Docker](docker.qmd) |
 |------------|-----------------------------|-----------------------------|
 | Runs as | The user, without root rights and without a daemon | A daemon with root rights |
 | Where | HPC clusters and other shared Linux machines | Laptops, servers, continuous integration, the cloud |

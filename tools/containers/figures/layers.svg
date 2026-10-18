@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Layers of a Docker image and its containers (Docker, "About this
+     document"). The image holds the read-only layers, from the base image at
+     the bottom up, beside its configuration; each container adds a writable
+     layer on top. The white background keeps the figure legible in dark
+     mode. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 266" width="560" height="266"
+     font-family="STIX Two Text, Times New Roman, serif" font-size="15">
+  <rect width="560" height="266" fill="#ffffff"/>
+
+  <!-- Containers: one writable layer each. -->
+  <text x="84" y="47" text-anchor="end">Containers</text>
+  <rect x="104" y="22" width="133" height="40" fill="none" stroke="#000000"
+        stroke-dasharray="5 3"/>
+  <text x="170.5" y="47" text-anchor="middle">Writable layer</text>
+  <rect x="247" y="22" width="133" height="40" fill="none" stroke="#000000"
+        stroke-dasharray="5 3"/>
+  <text x="313.5" y="47" text-anchor="middle">Writable layer</text>
+
+  <!-- The image: read-only layers and the configuration. -->
+  <text x="84" y="161" text-anchor="end">Image</text>
+  <text x="84" y="179" text-anchor="end" font-size="13">read-only</text>
+  <rect x="94" y="74" width="456" height="180" rx="6" fill="none"
+        stroke="#000000"/>
+
+  <g font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-size="12"
+     text-anchor="middle">
+    <rect x="104" y="84" width="276" height="40" fill="#ffffff" stroke="#000000"/>
+    <text x="242" y="108">COPY src /opt/analysis</text>
+    <rect x="104" y="124" width="276" height="40" fill="#ffffff" stroke="#000000"/>
+    <text x="242" y="148">RUN pip install …</text>
+    <rect x="104" y="164" width="276" height="40" fill="#ffffff" stroke="#000000"/>
+    <text x="242" y="188">COPY requirements.txt …</text>
+    <rect x="104" y="204" width="276" height="40" fill="#e0e0e0" stroke="#000000"/>
+    <text x="242" y="228">FROM python:3.12-slim</text>
+
+    <rect x="394" y="84" width="146" height="160" fill="#ffffff" stroke="#000000"/>
+    <text x="467" y="110" font-family="STIX Two Text, Times New Roman, serif"
+          font-size="15">Configuration</text>
+    <text x="467" y="142">ENV …</text>
+    <text x="467" y="166">WORKDIR …</text>
+    <text x="467" y="190">ENTRYPOINT …</text>
+    <text x="467" y="214">LABEL …</text>
+  </g>
+</svg>
