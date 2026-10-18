@@ -292,10 +292,11 @@ principles of its own.
 | **@part-library** | **[](#part-library)** | |
 | **[-@sec-library-structure]** | **[](#sec-library-structure)** | |
 | [-@sec-functions] | [](#sec-functions) | Put library code in functions and classes; at module level, only imports, constants, and definitions. |
+| [-@sec-ground-up] | [](#sec-ground-up) | Build a method of several steps from functions for its steps, public or internal, not as one block. |
 | [-@sec-plotting] | [](#sec-plotting) | Keep plotting out of computation, in separate functions with an optional dependency. |
 | **[-@sec-interfaces]** | **[](#sec-interfaces)** | |
 | [-@sec-no-files] | [](#sec-no-files) | Take and return data objects, and leave reading and writing files to the caller. |
-| [-@sec-layers] | [](#sec-layers) | Offer the API in layers, each built from the public primitives of the layer below. |
+| [-@sec-layers] | [](#sec-layers) | Offer the API in layers, from convenient functions for the common case to the primitives they are built from. |
 | [-@sec-follow-types] | [](#sec-follow-types) | Keep the type, precision, and placement of the caller's data. |
 | [-@sec-validation-cost] | [](#sec-validation-cost) | Always run cheap metadata checks; run data checks by default, with an explicit way to turn them off. |
 | **[-@sec-side-effects]** | **[](#sec-side-effects)** | |
@@ -1260,6 +1261,44 @@ functions, or stores its arguments for its methods to read back, should be a
 function.
 
 
+## Build from the ground up {#sec-ground-up}
+
+Build a function that carries out a method of several steps from functions for
+those steps, not as one block. Even a package that offers only one function
+for a method should have the primitives beneath it: the convenient call is
+then a short composition of them, and the primitives are there when users need
+them.
+
+Design still starts at the top. The call that users write comes first
+(@sec-api-first) and decides which steps are needed; the code is then built
+from the bottom up, primitives first. Cut the method where it divides
+naturally, into the steps that a paper would write as separate equations, such
+as computing attention weights from queries and keys and applying them to the
+values. Such primitives add no options and no generality that no application
+asked for (@sec-applications): they are the steps the function performs
+anyway, with names and interfaces of their own. A method of one step needs no
+primitives beneath it (@sec-kiss).
+
+Researchers change methods. Someone will want the same estimator with another
+weighting, or attention with another mask, and a method built as one block
+leaves them a single way: to copy its inside into their own code, where the
+copy drifts from the original (@sec-dry). Primitives are also easier to test
+than the whole, because known answers exist mostly for small and simple
+computations ([](testing.qmd#sec-known-answers)), and a failing test then
+points to the step that broke. If a faster, fused implementation of the method
+is added later, the composition of the primitives remains as a second opinion
+for it ([](testing.qmd#sec-second-opinion)).
+
+The primitives need not be public. Keep them internal until users need them,
+since everything public is a commitment (@sec-stable-api); making an internal
+function public later breaks nothing, while the reverse is a breaking change.
+PyTorch computed its multi-head attention with an internal function for scaled
+dot-product attention and made that function public in version 2.0. In R,
+`lm` is built on the public `lm.fit`, which takes the design matrix directly
+instead of a formula and a data frame. Public primitives form the lower layers
+of the API (@sec-layers).
+
+
 ## Avoid plotting in core functionality {#sec-plotting}
 
 Plotting is brittle, backend-dependent, and parameter-heavy, so core
@@ -1312,9 +1351,10 @@ Lower layers expose smaller, more specialized primitives. These functions
 require more explicit code from the user but provide greater flexibility,
 composability, and control over the computational workflow.
 
-Each layer should be built from the public primitives of the layer below, so
-that the convenient functions are compositions of the controllable ones rather
-than a second implementation of the same knowledge (@sec-dry).
+Each layer is built from the primitives of the layer below (@sec-ground-up),
+so that the convenient functions are compositions of the controllable ones
+rather than a second implementation of the same knowledge (@sec-dry). Offering
+a lower layer then means making its primitives public.
 
 The relationship between abstraction layers, control, and convenience is
 illustrated in @fig-layered-api. As abstraction layers increase, convenience
