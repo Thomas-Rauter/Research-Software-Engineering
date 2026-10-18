@@ -41,12 +41,13 @@ A definition file, such as `analysis.def`, is the recipe of an image. It has
 two parts: a header, which names the base image to start from (@sec-header),
 and sections, which say what to add to it. A section starts with its keyword on
 a line of its own, such as `%post`, and its body is the lines below it, up to
-the next section. Sections are of two types. Build-time sections run once, when
-the image is built, and decide what the image holds (@sec-build-sections).
-Run-time sections are stored in the image and run whenever a container starts
-from it, and decide what the container does (@sec-run-sections). `%labels` and
-`%help` are of neither type: they only store metadata in the image. Keep the
-definition file in the repository of the code it packages
+the next section. Sections are of three types, by when they take effect.
+Build-time sections run once, when the image is built, and decide what the
+image holds (@sec-build-sections). Run-time sections are stored in the image
+and run whenever a container starts from it, and decide what the container does
+(@sec-run-sections). Metadata sections never run: they are only stored in the
+image and describe it (@sec-metadata-sections). Keep the definition file in the
+repository of the code it packages
 ([](../../principles/design.qmd#sec-recipe)).
 
 ```default
@@ -75,10 +76,13 @@ From: python:3.12-slim@sha256:<digest>
 %runscript
     exec python /opt/analysis/run.py "$@"
 
-# Metadata, only stored in the image: one name and value per line.
+# Metadata sections, which never run and are only stored in the image.
 %labels
     org.opencontainers.image.source https://github.com/lab/analysis
     org.opencontainers.image.version 1.2.0
+
+%help
+    Runs the analysis: apptainer run analysis.sif <arguments>
 ```
 
 
@@ -117,6 +121,18 @@ in the container:
 |----------------|----------------------------------------------------------------|
 | `%environment` | A shell script that sets variables with `export`, run in every container before its program |
 | `%runscript` | A shell script that starts the program, run by `apptainer run`, which passes its arguments on as `"$@"` |
+
+
+## Metadata sections {#sec-metadata-sections}
+
+Metadata sections are only stored in the image and never run. Their bodies are
+text, which `apptainer inspect --labels` and `apptainer run-help` show
+(@sec-inspect):
+
+| Keyword | Body |
+|----------------|----------------------------------------------------------------|
+| `%labels` | One label per line: its name, then its value, such as the source and the version of the code |
+| `%help` | Text that says how to use the image, shown by `apptainer run-help` |
 
 
 ## Stages {#sec-stages}
@@ -217,6 +233,7 @@ nobody can rebuild, fix, or update it.
 ```bash
 apptainer inspect --deffile analysis.sif   # its definition file
 apptainer inspect --labels analysis.sif    # its labels
+apptainer run-help analysis.sif            # its help
 apptainer exec analysis.sif pip list       # its Python packages
 sha256sum analysis.sif                     # its checksum
 ```
