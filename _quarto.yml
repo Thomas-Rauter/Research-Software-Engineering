@@ -51,9 +51,9 @@ website:
             - section: Services
               contents: tools/services/*
             - section: Version control and CI
-              contents: []
+              contents: tools/version-control/*
             - section: Workflow managers
-              contents: []
+              contents: tools/workflows/*
 
 # Documents number their sections; the overview pages turn this off.
 number-sections: true

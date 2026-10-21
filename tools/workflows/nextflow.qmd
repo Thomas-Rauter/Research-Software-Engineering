@@ -1,0 +1,425 @@
+---
+title: Nextflow
+description: >-
+  What a research software engineer needs to know about Nextflow: that values
+  flow through channels into processes, that every task runs in a directory of
+  its own, and what follows from that, and how to write, configure, run,
+  resume, and debug a pipeline, and run one of nf-core.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: Nextflow
+---
+
+# What Nextflow is {#sec-overview .unnumbered}
+
+Nextflow runs workflows, which it calls pipelines, written in its own language,
+built on Groovy. A pipeline is a set of processes connected by channels: the
+input files go into a channel, each process takes values from its input
+channels and runs a task for each, and its outputs go into new channels, which
+feed the next processes. Values flow forward, and a task runs as soon as its
+inputs have arrived. Every task runs in a directory of its own under `work/`,
+from which the results are published. Almost everything that surprises
+newcomers follows from the channels and from these directories: samples paired
+with the wrong data, a process that runs once instead of a hundred times, and
+results that vanish with the work directory (@sec-model). Working with Nextflow
+comes down to writing processes and the workflow that connects them,
+configuring where they run, running and resuming, and reading the directory of
+a task that failed (@sec-usage).
+
+[](index.qmd) explains what Nextflow shares with Snakemake and states the rules
+for both. Many standard analyses, above all in genomics, exist as nf-core
+pipelines, which are run rather than written (@sec-nf-core).
+
+Since version 26.04, Nextflow reads every pipeline in its strict syntax, which
+this document uses. A pipeline written for an older version may need
+`NXF_SYNTAX_PARSER=v1`, or better, the version of Nextflow it was written for
+([](index.qmd#sec-pin-manager)).
+
+Checked against Nextflow 26.10.3.
+
+
+# How Nextflow thinks {#sec-model}
+
+A pipeline is a chain of channels and processes. A channel holds values, here
+pairs of the code of a station and a file; a process runs one task per value;
+and the outputs of its tasks go into the next channel in the order the tasks
+end:
+
+```default
+channel   [007, raw/007.csv]   [012, raw/012.csv]   [031, raw/031.csv]
+              |
+process   CLEAN: one task per value, each in a directory work/<hash>/
+              |
+channel   [031, 031.parquet]   [007, 007.parquet]   [012, 012.parquet]
+              |
+process   FIT: one task per value
+              |
+channel   [012, 012.fit.parquet]   [031, 031.fit.parquet]   [007, ...]
+              |   collect: all values into one list
+process   SUMMARIZE: one task for all stations
+              |
+publish   results/summary.parquet
+```
+
+
+## Processes, channels, and tasks {#sec-dataflow}
+
+A process is a step: what it takes, under `input:`, what it gives, under
+`output:`, and a script that makes the one from the other, with directives such
+as `cpus` and `container` (@sec-pipeline). A task is one run of a process, on
+one set of input values. A channel is a queue of values, such as files or
+tuples of an ID and its files, which a process or a factory, such as
+`channel.fromPath`, fills and another process takes from. Operators make new
+channels from old ones: `map` changes each value, `join` pairs the values of
+two channels by their key, and `collect` gathers all values into one list. The
+`workflow` block connects the channels and the processes, calling processes
+like functions.
+
+Nothing in the workflow says when a task runs. A process runs a task whenever
+each of its input channels has a value for it, so the tasks of many processes
+and stations run at the same time, as far as the executor allows. The
+`workflow` block is not a script whose lines run one after the other on the
+data; it sets up the connections, once, and the values then flow through them.
+
+
+## Match by key, not by order {#sec-identity}
+
+The tasks of a process end in any order, and their outputs enter the channel in
+the order they end. Two channels that come from different processes therefore
+hold their stations in different orders, and in other orders in every run. A
+process with two input channels takes the next value from each: given the
+cleaned data of the stations from one channel and their calibrations from
+another, it calibrates station 012 with the values of 007, and the results look
+like any other ([](../../principles/design.qmd#sec-loud)).
+
+Carry the identity with the data. Make every value a tuple of an ID and its
+files, such as `[id, file]`, and combine two channels with `join`, which pairs
+the values with the same ID, into one input of the process. Even within one
+channel the order changes from run to run: `collect` gathers the values in the
+order the tasks ended, so a step that needs them in order sorts them itself,
+such as by station.
+
+
+## A queue is used up, a value is not {#sec-value}
+
+A channel is of one of two kinds. A queue channel, such as one made by
+`channel.fromPath`, hands out each of its values once, and a process with two
+queue channels as inputs runs as many tasks as the shorter one has values. A
+value channel holds one value, which every task reads. A file that every task
+needs, such as a reference or a table of constants, belongs in a value channel:
+given as a queue, with `channel.fromPath(params.reference)`, it pairs with the
+first station only, the process runs one task instead of a hundred, and the
+pipeline ends with success.
+
+Pass such a file to the process directly, such as
+`CLEAN(stations, params.reference)`, which wraps it in a value channel, or make
+one with `channel.value`. The outputs of a process whose inputs are all values
+are values too, so an index built once from a reference reaches every task.
+
+
+## Every task runs in a directory of its own {#sec-workdir}
+
+Each task gets a directory under `work/`, named after its hash, such as
+`work/4f/9fdbb999c3a4e9e93932683fefa53a`. Nextflow links the input files of the
+task into it, under their own names, writes the script with its values filled
+in, and runs it there; afterwards, it takes the files that the outputs declare
+from it. The directory keeps everything about the task:
+
+| File | Holds |
+|----------------|----------------------------------------------------------------|
+| `.command.sh` | The script as it ran, with its values filled in |
+| `.command.run` | The wrapper that sets up the environment, such as the container, and runs `.command.sh` |
+| `.command.out`, `.command.err` | The standard output and the standard error of the script |
+| `.command.log` | Both together, as the executor saw them |
+| `.exitcode` | The exit status of the script |
+
+A script finds its inputs by name in its current directory, and should read and
+write nowhere else. A path that the script reaches on its own, such as
+`/project/reference/stations.csv`, works on the machine it was written on, but
+it is no input of the task: Nextflow neither includes it in the hash
+(@sec-resume) nor makes it available in a container or on a machine in the
+cloud. A file that the script writes but no output declares stays in the
+directory of the task and goes nowhere.
+
+
+## Results are published as links {#sec-publish}
+
+The outputs of the tasks stay in their directories. The workflow names those
+worth keeping in its `publish:` section, and the `output` block says where in
+the output directory, `results/` by default, each goes (@sec-pipeline). Unless
+told otherwise, Nextflow publishes a file as a symbolic link into the work
+directory, not as a copy. The results then look complete, but vanish when the
+work directory is cleaned up, and a copy of `results/`, such as with `cp -r` or
+`rsync -a`, holds only links. Publish copies, with
+`workflow.output.mode = 'copy'` (@sec-config). Older pipelines, among them many
+of nf-core, publish with the directive `publishDir` of each process instead,
+whose `mode` has the same default.
+
+
+## `-resume` reuses tasks by their hash {#sec-resume}
+
+Every task gets a hash, computed from the name of its process, its script with
+the values filled in, its input values and files, its container or Conda
+environment, and the scripts of `bin/` that it calls. Nextflow keeps the hashes
+in `.nextflow/cache`, and with `-resume`, it reuses each task whose hash it
+finds and whose outputs are still in its directory, instead of running it.
+Without `-resume`, it runs every task again, in new directories.
+
+A file counts by its path, its size, and its time of last modification, not by
+its contents: touching an input runs its tasks again, and so does a copy of the
+inputs that renews their times. On a shared file system that reports the times
+inconsistently, `cache = 'lenient'` in the `process` scope of the configuration
+leaves the time out, and `cache = 'deep'` hashes the contents, which is
+reliable and slow for large files. A change outside the task, such as a newer
+package in an environment that is not pinned or a file that the script reads
+from a path of its own (@sec-workdir), changes no hash and runs nothing again.
+
+
+# Working with Nextflow {#sec-usage}
+
+The examples are a pipeline that cleans the measurements of each station, fits
+a model to each, and summarizes the fits. A package does the science, with a
+command for each step, `stationfit clean`, `fit`, and `summarize`, installed in
+a container image ([](index.qmd#sec-thin)).
+
+
+## Write a pipeline {#sec-pipeline}
+
+```groovy
+// main.nf
+params {
+    input: String = 'data/raw/*.csv'
+    seed: Integer = 42
+}
+
+process CLEAN {
+    tag "${id}"
+    container 'ghcr.io/lab/stationfit@sha256:<digest>'
+
+    input:
+    tuple val(id), path(raw)
+
+    output:
+    tuple val(id), path("${id}.parquet")
+
+    script:
+    """
+    stationfit clean ${raw} --output ${id}.parquet
+    """
+}
+
+process FIT {
+    tag "${id}"
+    container 'ghcr.io/lab/stationfit@sha256:<digest>'
+    cpus 4
+    memory 8.GB
+    time 1.h
+
+    input:
+    tuple val(id), path(clean)
+    val seed
+
+    output:
+    tuple val(id), path("${id}.fit.parquet")
+
+    script:
+    """
+    stationfit fit ${clean} --output ${id}.fit.parquet \\
+        --seed ${seed} --threads ${task.cpus}
+    """
+}
+
+process SUMMARIZE {
+    container 'ghcr.io/lab/stationfit@sha256:<digest>'
+
+    input:
+    path fits
+
+    output:
+    path 'summary.parquet'
+
+    script:
+    """
+    stationfit summarize ${fits} --output summary.parquet
+    """
+}
+
+workflow {
+    main:
+    raw = channel.fromPath(params.input).map { f -> tuple(f.baseName, f) }
+    cleaned = CLEAN(raw)
+    fits = FIT(cleaned, params.seed)
+    summary = SUMMARIZE(fits.map { id, f -> f }.collect())
+
+    publish:
+    fits = fits
+    summary = summary
+}
+
+output {
+    fits {
+        path 'fits'
+    }
+    summary {
+        path '.'
+    }
+}
+```
+
+An input is a `val`, a value, or a `path`, a file that Nextflow links into the
+directory of the task; a `tuple` keeps the code of a station together with its
+file (@sec-identity). `tag` names each task in the progress of Nextflow, such as
+`FIT (007)`. In the script, `${...}` inserts a value, and `task.cpus` the
+number of CPUs of the task; a `$` meant for the shell is written `\$`, as in
+`\$HOME`, and a backslash at the end of a line `\\`. The seed reaches `FIT` as a
+plain value, which every task reads (@sec-value), and `collect` gathers the
+fits into one list for one task of `SUMMARIZE`.
+
+The `params` block declares the parameters with their types and defaults, and
+`--seed 7` on the command line overrides one. With the block, a misspelled
+parameter, such as `--sed 7`, or a value of the wrong type stops the run;
+without it, Nextflow accepts both without a word, and every value from the
+command line is text ([](index.qmd#sec-pin-manager)). A larger pipeline puts
+its processes into modules, files that the workflow includes, such as with
+`include { FIT } from './modules/fit'`.
+
+
+## Configure it {#sec-config}
+
+```groovy
+// nextflow.config
+manifest {
+    nextflowVersion = '!>=26.04'
+}
+
+workflow.output.mode = 'copy'
+
+process {
+    shell = ['/bin/bash', '-euo', 'pipefail']
+    cpus = 1
+    memory = 2.GB
+    time = 1.h
+}
+
+profiles {
+    local {
+        docker.enabled = true
+    }
+    slurm {
+        process.executor = 'slurm'
+        process.queue = 'cpu'
+        executor.account = 'ocean-lab'
+        executor.queueSize = 50
+        apptainer.enabled = true
+        apptainer.cacheDir = '/scratch/ocean-lab/apptainer'
+    }
+    test {
+        params.input = 'tests/data/*.csv'
+    }
+}
+```
+
+Nextflow reads `nextflow.config` beside the pipeline and in the directory it is
+started from, and a file given with `-c` overrides both. The `process` scope
+sets defaults for every process, which the directives of a process override.
+Two settings belong in every configuration. `pipefail` makes a task fail
+whose pipe fails halfway, such as `stationfit fit … | gzip`: by default,
+Nextflow runs scripts with `/bin/bash -ue`, which reports only the exit status
+of the last command of a pipe
+([](../../principles/design.qmd#sec-all-or-nothing)). And
+`workflow.output.mode = 'copy'` publishes copies instead of links
+(@sec-publish). `manifest.nextflowVersion` with `!` stops the run under any
+version older than 26.04.
+
+A profile collects the settings for one place ([](index.qmd#sec-profiles)), and
+`-profile slurm,test` combines two. With `process.executor = 'slurm'`, every
+task becomes a Slurm job in the partition `process.queue`, charged to
+`executor.account`, and `executor.queueSize` limits how many of them wait or
+run at once, 100 by default. With `apptainer.enabled`, Nextflow runs each task
+in its image with Apptainer, after converting the image from its registry into
+a SIF file in `apptainer.cacheDir`; `apptainer.runOptions` passes options to
+it, such as those of [](../containers/apptainer.qmd#sec-host). nf-test runs a
+pipeline or a single process on small inputs and checks its outputs, as nf-core
+does for all of its pipelines and modules.
+
+
+## Run, resume, and clean up {#sec-run}
+
+```bash
+nextflow run main.nf -profile slurm --seed 42 -with-report -with-trace
+nextflow run main.nf -profile slurm --seed 42 -resume  # reuse the unchanged
+nextflow log                                  # the runs, by name
+nextflow log nostalgic_miescher -f name,status,workdir  # the tasks of one
+nextflow clean -n -before nostalgic_miescher  # what cleaning would remove
+nextflow clean -f -before nostalgic_miescher  # remove it
+```
+
+The options of Nextflow take one dash, such as `-resume` and `-profile`, and
+the parameters of the pipeline two, such as `--seed`. A pipeline without a
+`params` block takes `--resume`, with two dashes, for a parameter named
+`resume`, and runs everything again. Every run gets a name, such as
+`nostalgic_miescher`, by which `nextflow log` lists its tasks and
+`-resume nostalgic_miescher` resumes it instead of the last run. `-with-report`
+and `-with-trace` write a report and a table of every task, with its hash,
+status, duration, and the memory and CPU it used
+([](index.qmd#sec-records)).
+
+`nextflow clean` removes the directories of the tasks of earlier runs, which
+then can no longer be resumed; results published as links would point nowhere
+(@sec-publish). On a cluster, start Nextflow where it can run for as long as
+the pipeline ([](index.qmd#sec-executor)).
+
+
+## When a task fails {#sec-debug}
+
+```bash
+cd work/e5/4067ac14ea8daf6602bb1ade80059d  # the directory from the error
+cat .command.sh                            # the script as it ran
+cat .command.err                           # what it wrote to standard error
+bash .command.run                          # run it again, in its container
+```
+
+When a task fails, Nextflow stops the pipeline and prints the process, the exit
+status, the end of the standard error, and the directory of the task. There,
+`.command.sh` shows what ran, with the values filled in, and
+`bash .command.run` runs it again as Nextflow did, so that a fix can be tried
+before the pipeline is resumed.
+
+```groovy
+process FIT {
+    errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'terminate' }
+    maxRetries 2
+    memory { 8.GB * task.attempt }
+    // ...
+}
+```
+
+A task killed for its memory or its time, which ends with an exit status from
+137 to 140, may succeed with more. Here, `FIT` asks for 8 GB more in each
+attempt, `task.attempt`, and `errorStrategy` retries only such failures, so that
+a defect still fails at once. `process.resourceLimits` in the configuration,
+such as `[cpus: 32, memory: 256.GB, time: 48.h]`, caps every request at what
+the cluster offers.
+
+
+## Run an nf-core pipeline {#sec-nf-core}
+
+```bash
+nextflow run nf-core/rnaseq -r 3.27.0 -profile test,apptainer --outdir results
+nextflow run nf-core/rnaseq -r 3.27.0 -profile apptainer \
+    -params-file params.yaml -c cluster.config
+```
+
+nf-core pipelines are maintained by a community, with tests, releases, and the
+documentation of every parameter on [nf-co.re](https://nf-co.re).
+`nextflow run nf-core/rnaseq` downloads the pipeline from GitHub into
+`~/.nextflow/assets`, and `-r` chooses the release
+([](index.qmd#sec-pin-manager)). Every pipeline has a profile `test`, which
+runs it on a small dataset and shows in minutes whether it works where it
+should, and profiles for containers, such as `apptainer` and `docker`. Put the
+parameters into a file, given with `-params-file`, which is kept with the
+results, rather than on the command line, and the settings of the cluster into
+a configuration given with `-c`; for many clusters, nf-core/configs already
+holds one, used by its name as a profile.

@@ -1,0 +1,416 @@
+---
+title: GitHub Actions
+description: >-
+  What a research software engineer needs to know about GitHub Actions: that
+  events in a repository start workflows, whose jobs each run on a fresh
+  machine that has nothing but what the workflow brings, and what follows from
+  that, and how to write a workflow that tests a package, the triggers and keys
+  used most, how to pass files and values on, release a version, follow and
+  debug runs, and keep the actions current.
+order: 2
+format:
+  html: default
+  pdf:
+    output-file: GitHub_Actions
+---
+
+# What GitHub Actions is {#sec-overview .unnumbered}
+
+GitHub Actions runs commands on GitHub's machines when something happens in a
+repository: a push, a pull request, a tag, or a time of day. A workflow is a
+YAML file in `.github/workflows/` that says on which events it runs and what its
+jobs do. Each job runs on a fresh machine, a runner, which has an operating
+system and a set of common tools but nothing of the project, not even its code,
+until the steps of the job fetch and install it. That is the point of
+continuous integration: a job that passes shows that the project installs and
+its tests pass from what the repository declares, not from the state of
+someone's laptop. Almost everything that surprises newcomers follows from that:
+tools that are missing, files that vanish between jobs, variables that vanish
+between steps, and a pull request tested as something other than its branch
+(@sec-model). Working with GitHub Actions comes down to writing workflow files
+and reading the logs of their runs (@sec-usage).
+
+The tests of a package should run automatically on every change, across the
+versions it supports ([](../../principles/design.qmd#sec-testing)), and so
+should the test of a workflow on its small dataset
+([](../../principles/design.qmd#sec-end-to-end)) and the build of the
+documentation ([](../../principles/documenting.qmd#sec-docs-as-code)). For a
+repository on GitHub, GitHub Actions is where that happens, on the commits and
+tags of [](git.qmd).
+
+Checked against GitHub Actions in October 2026, with the actions of the
+examples at the versions they name.
+
+
+# How GitHub Actions thinks {#sec-model}
+
+An event starts a workflow, a workflow runs jobs, and a job runs steps:
+
+```default
+event      a push, a pull request, a tag, a schedule, a click
+  |
+workflow   .github/workflows/tests.yml, which runs on the event
+  |
+jobs       test, Python 3.12      test, Python 3.15      docs
+             each on a fresh runner, all at the same time
+  |
+steps      check out  ->  install  ->  test
+             one after the other, on the runner of their job
+```
+
+
+## Events, workflows, jobs, and steps {#sec-terms}
+
+An event, such as a push to a branch, starts every workflow of the repository
+that runs on it, and each start is a run: one execution of the workflow, for one
+commit. A workflow holds jobs, which run at the same time, each on a runner of
+its own, unless a job names others with `needs` and waits for them. A job holds
+steps, which run one after the other on its runner and share its files. A step
+either runs commands, with `run`, or an action, with `uses`: a step that someone
+has published, such as `actions/checkout`, which fetches the code of the
+repository, named by its repository and a version, as in `actions/checkout@v7`.
+The result of each job is a check, shown next to the commit and in the pull
+request, and a job fails when one of its steps does.
+
+
+## Every job starts from nothing {#sec-fresh}
+
+A runner is a virtual machine made for one job and deleted after it. It starts
+with an operating system and the tools of its image, such as Git, compilers,
+and several versions of Python, but without the code of the project, its
+dependencies, or anything that an earlier job or run left behind. Every job
+therefore checks out the code and installs what it needs before it runs
+anything, and a job that passes shows that the repository holds everything the
+project needs ([](../../principles/design.qmd#sec-declared-inputs)).
+
+Nothing passes from one job to another, or from one run to the next, unless the
+workflow passes it (@sec-passing). An artifact is a set of files that a job
+uploads and that later jobs of the run, or people, download, kept for 90 days. A
+cache saves files under a key, such as a hash of the lock file, from which later
+runs restore them, to install faster. A cache only saves time: it is deleted
+after a week without use, and a job must give the same result without it.
+
+The image is an input too. Its tools change from month to month, and a label
+such as `ubuntu-latest` moves to the next version of the operating system when
+GitHub decides, so a job that relies on what the image happens to hold breaks,
+or computes differently, without a change of its own. Name the version of the
+image, such as `ubuntu-24.04`, and install the versions of the language and the
+tools that the job needs.
+
+
+## A run tests a commit, and a pull request its merge {#sec-commits}
+
+Each run belongs to one commit, and its checks are attached to it. A run for a
+push tests the commit pushed. A run for a pull request does not test the tip of
+its branch: it tests a merge commit that GitHub makes of the branch and its
+target, so that the checks show whether `main` would pass after the merge. The
+checks run again with every push to the branch, but not when `main` moves on:
+the checks of a pull request that passed last week describe a merge with last
+week's `main`. While a pull request has a merge conflict, no checks run at all.
+A ruleset of the repository can require the checks to pass, and the branch to
+be up to date with `main`, before a pull request can be merged.
+
+
+## A matrix makes many jobs of one {#sec-matrix}
+
+`strategy.matrix` turns one job into one per combination of its values, such as
+three operating systems and two versions of Python into six jobs (@sec-test).
+This is how a package is tested across the versions it supports
+([](../../principles/design.qmd#sec-testing)): the oldest and the newest version
+of the language, and of the libraries the newest that the package allows and
+the oldest. The oldest versions are installed only by a job that asks for them,
+as uv does with `--resolution lowest-direct`; a lower bound that no job installs
+is never tested.
+
+By default, a job of the matrix that fails cancels the others, which hides
+whether the failure belongs to one combination or to all; `fail-fast: false`
+lets every job finish. A matrix makes at most 256 jobs.
+
+
+## Each step is a new shell {#sec-shell}
+
+Each `run` step is a script of its own, run by a new shell. A directory changed
+with `cd`, a variable set with `export`, and an environment activated in one
+step are gone in the next; a step passes variables on to the later steps by
+appending them to the file `$GITHUB_ENV` (@sec-passing).
+
+Without `shell`, a step runs in `bash -e` on Linux and macOS: it stops at the
+first command that fails, but not when a command fails within a pipe, since a
+pipe returns the status of its last command. `pytest | tee test.log` then
+passes when the tests fail ([](../../principles/testing.qmd#sec-can-fail)).
+With `shell: bash`, which `defaults` sets for every step (@sec-test), it runs in
+`bash -eo pipefail`, where a pipe fails when any command in it does.
+
+An expression, `${{ … }}`, is replaced in the text of the script before the
+shell runs it. A value that someone else controls, such as the title of a pull
+request, thereby becomes part of the script, and a title that holds a command
+runs it, with the rights of the job (@sec-permissions). Pass such values through
+`env`, such as `TITLE: ${{ github.event.pull_request.title }}`, and use them in
+the script as variables, `"$TITLE"`.
+
+
+## A job runs with the rights it is given {#sec-permissions}
+
+Each job receives a token, `GITHUB_TOKEN`, with which its steps act on the
+repository, such as to read the code, publish a release, or comment on a pull
+request, and which expires when the job ends. `permissions` sets what it may
+do, and every permission that is not named is then none: `contents: read` at
+the top of a workflow lets its jobs read the code and nothing else, and a job
+that publishes asks for more itself. Secrets, such as the token of a package
+index, are stored in the settings of the repository and given to a step as
+`${{ secrets.NAME }}`. They are masked in the logs, and they are not passed to
+runs for a pull request from a fork, whose token can only read. A workflow on
+`pull_request_target` runs with the secrets and rights of the repository for a
+pull request from anyone: never check out and run its code there.
+
+An action is code that someone else wrote, run with these rights and secrets.
+Whoever controls its repository can move a tag such as `@v7` to other code,
+which then runs in your next job; a full commit hash cannot be moved. The
+actions of GitHub, in `actions/`, run with the trust you already place in
+GitHub; name other actions by the hash of a release, with the version in a
+comment (@sec-test), and let Dependabot update both (@sec-dependabot). GitHub's
+lockfile of actions, `.github/workflows/actions.lock`, written by
+`gh actions-lock`, records the commit of every action, including the actions
+that actions use themselves, but is still in public preview.
+
+
+# Working with GitHub Actions {#sec-usage}
+
+The examples test a Python package with uv. The same shape holds for other
+languages, with other actions for the setup (@sec-test).
+
+
+## Test a package on every change {#sec-test}
+
+```yaml
+# .github/workflows/tests.yml
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 5 * * 1"  # Mondays at 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-26, windows-2025]
+        python: ["3.12", "3.15"]
+        resolution: [highest]
+        include:
+          - os: ubuntu-24.04
+            python: "3.12"
+            resolution: lowest-direct
+    steps:
+      - uses: actions/checkout@v7
+      # astral-sh/setup-uv v10.3.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: uv sync --upgrade --resolution ${{ matrix.resolution }}
+      - name: Test
+        run: uv run --no-sync pytest
+```
+
+The workflow runs on every push to `main`, on every pull request, by hand, and
+every Monday, so that a new release of a dependency that breaks the package
+shows up within a week rather than with the next change. The matrix makes seven
+jobs: three operating systems with the oldest and the newest Python that the
+package supports, each with the newest versions of its dependencies, and one
+with the oldest versions that `pyproject.toml` allows (@sec-matrix).
+`uv sync --upgrade` installs the newest versions rather than those of the lock
+file, which a library leaves to its users
+([](../../principles/design.qmd#sec-pin)), and `--no-sync` keeps `uv run` from
+installing again. `timeout-minutes` stops a job that hangs after 30 minutes
+instead of six hours, the default. `concurrency` puts the runs of a pull request
+into one group, in which a new run cancels the one before it, and gives every
+other run a group of its own, the commit, so that each commit of `main` keeps
+its result.
+
+A workflow, whose environment is pinned, installs from its lock file instead,
+with `uv sync --locked`, which fails if the lock file is out of date, and its
+test runs it on its small dataset, such as with `snakemake --profile
+profiles/test` ([](../workflows/snakemake.qmd#sec-run)). An R package is checked
+with the steps of `r-lib/actions`, which `usethis::use_github_action()` writes
+into a workflow:
+
+```yaml
+    steps:
+      - uses: actions/checkout@v7
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.r }}
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: check
+      - uses: r-lib/actions/check-r-package@v2
+```
+
+
+## Triggers {#sec-triggers}
+
+```yaml
+on:
+  push:
+    branches: [main]    # commits pushed to main
+    tags: ["v*"]        # tags such as v1.2.0
+  pull_request:         # pull requests, as merged into their target
+  schedule:
+    - cron: "0 5 * * 1" # Mondays at 05:00 UTC, on the default branch
+  workflow_dispatch:    # by hand, on GitHub or with gh workflow run
+  release:
+    types: [published]  # a release published on GitHub
+```
+
+A scheduled run tests the default branch, starts at a time in UTC, often some
+minutes late when GitHub is busy, and is turned off in a public repository after
+60 days without activity. A tag or a commit that a workflow pushes with its
+`GITHUB_TOKEN` starts no workflow, so that workflows cannot start each other
+without end; a workflow that releases a version therefore runs on the tag that
+a person pushes (@sec-tag-release).
+
+
+## The keys used most {#sec-keys}
+
+| Key | Says |
+|-------------------------------|--------------------------------------------------------------|
+| `on` | The events the workflow runs on (@sec-triggers) |
+| `permissions` | What the token of each job may do (@sec-permissions) |
+| `concurrency` | Which runs cancel, or wait for, each other |
+| `defaults.run.shell` | The shell of every `run` step (@sec-shell) |
+| `env` | Variables of the workflow, a job, or a step |
+| `jobs.<id>.runs-on` | The image of the runner, such as `ubuntu-24.04` |
+| `jobs.<id>.needs` | The jobs that must succeed before this one starts |
+| `jobs.<id>.if` | A condition, such as `github.event_name == 'push'` |
+| `jobs.<id>.strategy.matrix` | The values that make one job many (@sec-matrix) |
+| `jobs.<id>.timeout-minutes` | When the job is stopped; 360 by default |
+| `jobs.<id>.outputs` | Values that the jobs that need this one read (@sec-passing) |
+| `steps[*].uses`, `with` | An action, and its inputs |
+| `steps[*].run` | Commands, run by a new shell |
+| `steps[*].id`, `name` | A name for later steps, and a title for the log |
+| `steps[*].if` | A condition, such as `failure()`, true after a failed step |
+
+
+## Pass files and values on {#sec-passing}
+
+```yaml
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0     # all commits and tags, for git describe
+      - id: version
+        run: echo "name=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
+      - run: echo "MPLBACKEND=Agg" >> "$GITHUB_ENV"  # for every later step
+      - run: uv run --no-sync pytest --basetemp=test-output
+      - uses: actions/upload-artifact@v7
+        if: failure()        # only after a step has failed
+        with:
+          name: test-output-${{ steps.version.outputs.name }}-${{ matrix.os }}
+          path: test-output/
+```
+
+A step writes its outputs to `$GITHUB_OUTPUT`, and later steps read them as
+`steps.<id>.outputs`; a job passes them on through `outputs`, and the jobs that
+need it read them as `needs.<job>.outputs`. `$GITHUB_ENV` sets variables for
+every later step of the job. An artifact carries files to people, here those
+that the failed tests wrote, and to later jobs, which get them with
+`actions/download-artifact`; its name must be unique within the run, hence the
+version and the system in it. `actions/checkout` fetches only the commit
+itself, without the history or the tags, so `git describe`, and tools that take
+the version of a package from its tags, such as setuptools-scm, need
+`fetch-depth: 0`.
+
+setup-uv caches the packages it downloads by itself. For other tools,
+`actions/cache` saves a directory under a key, such as
+`key: deps-${{ hashFiles('requirements.txt') }}`, which changes with the file.
+
+
+## Release a version {#sec-tag-release}
+
+```yaml
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write  # to create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+```
+
+Pushing the tag of a version ([](git.qmd#sec-tag)) makes a release of it on
+GitHub. The job needs no checkout, since `gh` acts on the repository that
+`GH_REPO` names. The notes that GitHub generates list the pull requests merged
+since the last release; they do not replace the changelog, which says what
+changed for users ([](../../principles/documenting.qmd#sec-changelog)). Files
+named after the tag, such as `dist/*`, are attached to the release, from a job
+that built them or downloaded them as an artifact (@sec-passing). A package
+index such as PyPI accepts a package without a stored token through trusted
+publishing, which lets a job with `id-token: write` prove that it runs in this
+repository.
+
+
+## Follow and debug runs {#sec-debug}
+
+```bash
+gh run list --workflow tests.yml   # the latest runs of a workflow
+gh run watch                       # follow a run until it ends
+gh run view <run> --log-failed     # the log of the steps that failed
+gh run rerun <run> --failed --debug  # run the failed jobs again, verbose
+gh run download <run> -n figures   # an artifact of a run
+gh workflow run tests.yml --ref fix-units  # start a run by hand
+actionlint                         # check the workflow files
+```
+
+actionlint checks workflow files before they are pushed: their syntax, their
+expressions, the inputs of common actions, and values that someone else
+controls used in a script (@sec-shell). Most mistakes that would otherwise show
+up only as a failed run, minutes later, show up there. No tool runs a workflow
+on your own machine exactly as GitHub does, although act comes close, with
+containers that resemble the runners. Keep the commands of a job in a script or
+a Makefile that the workflow calls, so that they can be run and debugged
+anywhere; this site's own workflow does no more than `make site`.
+
+
+## Keep the actions current {#sec-dependabot}
+
+```yaml
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+```
+
+Dependabot opens a pull request when an action has a new version, for actions
+named by a tag and by a hash alike, and so keeps them current without moving
+them silently (@sec-permissions).

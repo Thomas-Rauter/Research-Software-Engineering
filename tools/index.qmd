@@ -19,8 +19,8 @@ of its own. A job or a tool without a link has no document yet.
 | Experiment tracking | [MLflow](tracking/mlflow.qmd) |
 | HPC scheduling | [Slurm](scheduling/slurm.qmd) |
 | Services | [FastAPI](services/fastapi.qmd) |
-| Version control and CI | Git, GitHub Actions |
-| Workflow managers | Nextflow, Snakemake |
+| Version control and CI | [Git](version-control/git.qmd), [GitHub Actions](version-control/github-actions.qmd) |
+| [Workflow managers](workflows/index.qmd) | [Nextflow](workflows/nextflow.qmd), [Snakemake](workflows/snakemake.qmd) |
 
 Like a language document, a tool document mixes rules, which carry the
 [normative language](../principles/design.qmd#sec-normative) of *Design

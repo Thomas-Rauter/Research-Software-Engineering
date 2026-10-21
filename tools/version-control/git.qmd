@@ -1,0 +1,409 @@
+---
+title: Git
+description: >-
+  What a research software engineer needs to know about Git: that a repository
+  is a history of snapshots, each named by a hash of its contents, with names
+  that point into it, and what follows from that, and the commands to record,
+  look up, branch, share, tag, and undo changes, and to find the commit that
+  changed a result.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: Git
+---
+
+# What Git is {#sec-overview .unnumbered}
+
+Git keeps the history of a project as a chain of snapshots, the commits. A
+commit records every file of the project as it was at one moment, who made it,
+when, and why, and which commit came before it. Its name is a hash of all of
+that, so a commit never changes, and its name stands for the whole history that
+leads to it. Branches and tags are names for commits: a branch moves on with
+every new commit, and a tag stays where it was put. Every copy of a repository
+holds the whole history, and copies exchange commits only when told to. Almost
+everything that surprises newcomers follows from that: changes missing from a
+commit, commits that seem lost, pushes that are rejected, and a history that
+someone rewrote (@sec-model). Working with Git comes down to a few dozen
+commands (@sec-usage).
+
+For research software, the name of a commit is what makes a result traceable:
+it says exactly which code computed the result, and a tag gives the commit of a
+release a name that others can cite
+([](../../principles/design.qmd#sec-traceability)). [](github-actions.qmd)
+runs the tests on every commit pushed to GitHub.
+
+Checked against Git 2.56.
+
+
+# How Git thinks {#sec-model}
+
+A repository is the directory `.git` at the top of a project, next to the files
+you work on. It holds the commits, each of which points to the one before it,
+its parent, and the names that point to commits (@fig-commits). Everything Git
+does either adds commits or moves names.
+
+![The history of a repository. Each white box is a commit, named by the start of its hash, and points to its parent. The gray boxes are names: `main` and `feature` are branches, which move on with each new commit, and `HEAD` names the branch checked out; `v1.0.0` is a tag, which stays; `origin/main` is where `main` was on the remote at the last fetch, one commit behind.](figures/commits.svg){#fig-commits}
+
+
+## A commit is a snapshot, named by its hash {#sec-commits}
+
+A commit holds the whole project, not the changes: every file as it was when the
+commit was made. The changes that `git diff` and `git log -p` show are computed
+from two snapshots when they are asked for. A commit also holds its author, its
+date, its message, and the hash of its parent, and its own hash is computed from
+all of these, such as `8b41d07…`, of which the first seven characters usually
+suffice. Changing anything, even a word of the message, gives another hash, and
+so another commit. Because a commit names its parent, which names its own, one
+hash identifies the code together with its whole history: two clones that have
+a commit have the same files in it.
+
+Because every commit holds every file, the repository keeps every version of
+every file for as long as it exists. A file that does not change is stored once,
+so this costs little for code. A dataset of a few gigabytes committed once,
+however, stays in every clone, even after the next commit deletes it, and so do
+a password and a patient record
+([](../../principles/testing.qmd#sec-isolated)). Removing such a file means
+rewriting every commit since it was added (@sec-rewrite), and every clone made
+in the meantime still holds it.
+
+
+## What goes in, and what stays out {#sec-ignore}
+
+A repository holds what was written: the code, the configuration, the
+documentation, small test data, and the recipes of everything that was made
+([](../../principles/design.qmd#sec-recipe)), such as an environment or lock
+file, a Dockerfile, and the scripts that draw the figures. It does not hold what
+the recipes make, such as results, built packages, and environments like
+`.venv/`, nor what is too large or too confidential for every clone: raw data,
+which belong in an archive, and secrets, such as tokens and passwords.
+
+A file `.gitignore` lists patterns of files that Git does not offer to add
+(@sec-start). It applies only to untracked files, those never added: a file that
+was committed stays tracked, with all its changes, until `git rm --cached`
+removes it from the next commit, though not from the history. Large files that
+must be versioned with the code, such as reference data that tests read, can go
+to Git LFS, which keeps only a pointer to each file in the commits, or to DVC.
+
+
+## The index is the next commit {#sec-index}
+
+A change passes through three places on its way into the history:
+
+| Place | Holds | Changes with |
+|---------------|-------------------------------------------|-------------------------------------|
+| Working tree | The files as you edit them | Editing, `git restore` |
+| Index | The snapshot that the next commit will be | `git add`, `git restore --staged` |
+| Repository | The commits | `git commit` |
+
+`git add` copies a file as it is now into the index, also called the staging
+area, and `git commit` turns the index into a commit. A file changed again after
+`git add` goes into the commit as it was when it was added; `git status` then
+lists it as staged and as changed. `git diff` shows what `git add` would add,
+the difference between the working tree and the index, and `git diff --staged`
+what `git commit` would record, the difference between the index and the last
+commit. A new file is untracked until it is first added: Git neither records it
+nor ever restores it.
+
+The index lets a commit hold less than everything that changed, such as one fix
+while another change waits, and `git add -p` adds the changes of a file hunk by
+hunk. A commit that does one thing can be reviewed, reverted, and found again
+when it changed a result (@sec-bisect).
+
+
+## A branch is a name that moves {#sec-branches}
+
+A branch is a name for a commit, its tip, and nothing more: a file that holds a
+hash. `HEAD` names the branch you are on. A new commit gets the tip as its
+parent, and the branch moves on to it, while the other branches stay where they
+are. A branch therefore costs nothing to create, and switching to one, with
+`git switch`, replaces the files of the working tree with those of its tip.
+Uncommitted changes come along, unless the other branch has changed the same
+files, in which case Git refuses to switch.
+
+A tag is a name that does not move: `v1.0.0` names the commit of a release for
+good. An annotated tag, made with `git tag -a`, also records who made it, when,
+and why, as a release should (@sec-tag). Checking out a tag or a commit, with
+`git switch --detach v1.0.0`, puts `HEAD` on a commit instead of a branch: in
+this detached state, you can look around and run the code, but a new commit
+belongs to no branch and drops out of sight when you switch away (@sec-reflog).
+
+Merging joins two lines of history. When the current branch is contained in the
+other, `git merge` only moves its name forward, a fast-forward; when both have
+commits of their own, it makes a merge commit, with two parents. Where both
+changed the same lines, the merge stops with a conflict: Git writes both
+versions into the file, between markers, and leaves the choice to you, which
+you record with `git add` and finish with `git merge --continue`.
+
+
+## A clone knows the remote as of the last fetch {#sec-remotes}
+
+A clone holds the whole history and works without the repository it came from.
+That repository is its remote, named `origin`, and Git exchanges commits with it
+only when told: `git fetch` gets the commits that the remote has and the clone
+does not, `git push` sends those the clone has and the remote does not, and
+`git pull` fetches and then brings the fetched commits into the current branch.
+
+What a clone knows about the remote is what it learned at the last fetch.
+`origin/main` is a remote-tracking branch, the place where `main` was on
+`origin` then, not where it is now. `git status` reports "Your branch is up to
+date with 'origin/main'" when the branch agrees with this record, even if others
+have pushed since; only after `git fetch` does it say how far behind the branch
+is.
+
+A push moves a branch of the remote forward, and only forward. If the remote
+has commits that yours does not contain, because someone pushed in the
+meantime, the push is rejected: fetch their commits, merge them or rebase onto
+them (@sec-rewrite), and push again. Tags do not travel with the branches
+unless asked to (@sec-tag), and a clone that already has a tag keeps it, without
+a word, when the tag is moved on the remote. Never move a tag that others may
+have fetched.
+
+
+## Rewriting history makes new commits {#sec-rewrite}
+
+A commit cannot be changed, only replaced. `git commit --amend` makes a new
+commit with the corrections and moves the branch to it, and `git rebase main`
+replays the commits of the current branch on top of `main`, one by one, as new
+commits with new hashes, so that the history becomes a straight line instead of
+a merge. The old commits remain (@sec-reflog), and so does every copy of them in
+other clones.
+
+That is harmless for commits that only you have, and confusing for commits that
+others have built on: their branches still hold the old commits, and the next
+merge brings them back next to their copies. Rewrite only commits that you have
+not pushed, or those of a branch of your own, such as the branch of a pull
+request; never rewrite `main` or a release, whose hash others may have cited.
+The remote rejects a push that would drop commits unless it is forced, and
+`git push --force-with-lease --force-if-includes` forces it only if every commit
+it drops has been on your own branch, so that it cannot overwrite what someone
+else pushed in the meantime. `--force-with-lease` alone checks against
+`origin/main` as of the last fetch: after a fetch, such as one that an editor
+runs in the background, it overwrites the commits that the fetch brought in,
+unseen.
+
+
+## Nothing committed is lost {#sec-reflog}
+
+Git removes a commit only when no name and no entry of the reflog reach it any
+more, and then only after two weeks. `git reflog` lists every commit that `HEAD`
+has been on, with the command that moved it there; its entries are kept for 90
+days, or 30 for commits that the branch no longer contains. A commit lost to
+`git reset --hard`, a rebase, a deleted branch, or a detached `HEAD` is found
+there and named again with `git branch rescue <commit>`.
+
+What Git cannot give back is what was never committed. `git restore` and
+`git reset --hard` overwrite changes in the working tree without asking, and an
+untracked file that is deleted is gone. Commit early, on a branch of your own if
+need be, and tidy up before sharing (@sec-rewrite).
+
+
+## A changed working tree is code without a name {#sec-dirty}
+
+A commit names code only if the working tree holds no changes. A result computed
+from a working tree with uncommitted changes, and recorded with the hash of the
+last commit, claims code that never ran, as does the record of an MLflow run
+started from such a tree ([](../tracking/mlflow.qmd#sec-only-what-logged)).
+`git describe --tags --always --dirty` prints a name for the state of the
+working tree: `v1.2.0` at a tagged commit, `v1.2.0-3-g1a2b3c4` three commits
+after the tag, at commit `1a2b3c4`, and `-dirty` at the end when tracked files
+have changed. A file that was never added does not count, so a new script that
+has not been committed leaves the name clean. `git status --porcelain` lists it,
+and prints nothing only for a working tree that matches the commit, apart from
+ignored files.
+
+Record the name with every result that counts
+([](../../principles/design.qmd#sec-traceability)), and let workflow code refuse
+to start such a run, or at least warn, when `git status --porcelain` prints
+anything.
+
+
+# Working with Git {#sec-usage}
+
+The commands below cover daily work. After most of them, `git status` says where
+things stand and what to do next, and `git help <command>` explains any of them.
+
+
+## Set up {#sec-setup}
+
+```bash
+git config --global user.name "Ada Lovelace"
+git config --global user.email "ada@example.org"
+git config --global init.defaultBranch main  # master until Git 3.0
+git config --global pull.rebase true         # pull replays unpushed commits
+git config --list --show-origin              # every setting, and its file
+```
+
+The name and the email go into every commit, and changing them later means
+rewriting it; use those under which you publish. `git pull` stops when both the
+branch and the remote have new commits, until told whether to merge or rebase.
+With `pull.rebase`, it replays the commits you have not pushed on top of those
+fetched, which rewrites only commits that nobody else has (@sec-rewrite).
+
+
+## Start a repository {#sec-start}
+
+```bash
+git init                                     # a new repository, here
+git clone git@github.com:lab/stationfit.git  # a copy, with all its history
+git remote add origin git@github.com:lab/stationfit.git  # for one from init
+git remote -v                                # the remotes and their URLs
+```
+
+```default
+# .gitignore
+# What the code makes, and the data it reads
+/results/
+/data/
+# Environments and caches
+.venv/
+__pycache__/
+.snakemake/
+# Secrets
+.env
+```
+
+A pattern that starts with a slash matches only at the top of the repository,
+and one that ends with a slash only directories. The repository
+`github/gitignore` has templates for many languages and tools.
+
+
+## Record changes {#sec-record}
+
+```bash
+git status                # what changed, what is staged, what is new
+git diff                  # the changes not yet staged
+git diff --staged         # the changes staged for the next commit
+git add src/fit.py        # stage a file as it is now
+git add -p                # stage the changes hunk by hunk
+git commit -m "Fix the units of the drift rate"
+git commit --amend        # replace the last commit, if not yet pushed
+git mv fit.py model.py    # rename a file
+git rm --cached big.csv   # stop tracking a file, but keep it on disk
+```
+
+The first line of a message is its title, of about 50 characters, and the body,
+after an empty line, says why the change was made, since the diff already shows
+what changed ([](../../principles/documenting.qmd#sec-comments)).
+
+
+## Look at the history {#sec-history}
+
+```bash
+git log --oneline --graph --all  # every branch, a line per commit
+git log -p src/fit.py            # the changes to one file
+git log -S "0.05" -- src/        # the commits that added or removed a text
+git show 8b41d07                 # one commit, with its changes
+git show v1.0.0:src/fit.py       # a file as it was in a release
+git diff v1.0.0 v1.1.0 -- src/   # what changed between two releases
+git blame src/fit.py             # the last commit of every line
+```
+
+`git log -S` finds the commit that changed a constant, such as a tolerance or a
+default, which is often the fastest way to learn why a result changed between
+two versions.
+
+
+## Branch and merge {#sec-branch}
+
+```bash
+git switch -c fix-units   # create a branch and switch to it
+git switch main           # switch to a branch
+git branch -a             # the branches, with those of the remotes
+git merge fix-units       # merge a branch into the current one
+git rebase main           # replay the current branch on top of main
+git branch -d fix-units   # delete a branch that has been merged
+```
+
+When a merge or a rebase stops with a conflict:
+
+```bash
+git status                # the files with conflicts
+git add src/fit.py        # mark a file as resolved, after editing it
+git merge --continue      # or git rebase --continue
+git merge --abort         # or git rebase --abort: back to the start
+```
+
+
+## Share {#sec-share}
+
+```bash
+git fetch                       # get new commits; changes none of yours
+git pull                        # fetch, and bring them into this branch
+git push                        # send this branch
+git push -u origin fix-units    # the first push of a new branch
+git push --force-with-lease --force-if-includes  # after a rebase of your own
+```
+
+A pull request belongs to GitHub, not to Git: a request to merge one branch into
+another, with its changes, a review, and the checks that [](github-actions.qmd)
+runs. GitHub's command-line tool, `gh`, opens and merges them:
+
+```bash
+gh pr create --fill       # open a pull request for this branch
+gh pr checkout 42         # check out the branch of pull request 42
+gh pr merge 42 --squash   # merge it as a single commit
+```
+
+A squash merge, like a rebase merge, puts new commits on `main`, not those of
+the branch, so `git branch -d` afterwards refuses to delete the branch as not
+merged; `git branch -D` deletes it.
+
+
+## Tag a release {#sec-tag}
+
+```bash
+git tag -a v1.2.0 -m "Version 1.2.0"  # tag the current commit
+git push origin v1.2.0                # tags are pushed one by one
+git push --follow-tags                # or with the commits they tag
+git tag --list                        # every tag
+git describe --tags --always --dirty  # the name of the current state
+git switch --detach v1.2.0            # check out a release
+```
+
+Tag the commit that is released, once its tests pass and the changelog names
+the version ([](../../principles/documenting.qmd#sec-changelog)), and never
+move the tag afterwards (@sec-remotes). On GitHub, a release is made from a tag;
+Zenodo, once connected to the repository, archives every release and gives it a
+DOI ([](../../principles/documenting.qmd#sec-cite)).
+
+
+## Undo {#sec-undo}
+
+| To | Run |
+|----------------------------------------------------|----------------------------------------------|
+| Discard the changes to a file | `git restore <file>` |
+| Unstage a file, keeping its changes | `git restore --staged <file>` |
+| Bring a file back as it was in a release | `git restore --source v1.0.0 <file>` |
+| Undo the last commit, not yet pushed, keeping its changes | `git reset --soft HEAD~1` |
+| Discard every change since the last commit | `git reset --hard` |
+| Undo a pushed commit, with a new commit | `git revert <commit>` |
+| Set changes aside, and bring them back | `git stash -u`, then `git stash pop` |
+| Find a lost commit, and name it again | `git reflog`, then `git branch rescue <commit>` |
+
+`git restore <file>` and `git reset --hard` discard what was never committed,
+which nothing brings back (@sec-reflog). `git stash` without `-u` leaves new
+files where they are.
+
+
+## Find the commit that changed a result {#sec-bisect}
+
+```bash
+git bisect start           # start a search
+git bisect bad             # the current commit gives the wrong result
+git bisect good v1.1.0     # this release gave the right one
+git bisect run ./check.sh  # let a script test each commit Git picks
+git bisect reset           # back to where the search started
+```
+
+`git bisect` halves the commits between a good one and a bad one with each
+test, so among a thousand commits it finds the one that changed a result in ten
+steps. Without `run`, you test each commit that Git checks out and answer with
+`git bisect good` or `git bisect bad`. With `run`, a script tests it: it exits
+with 0 when the result is right, with 1 when it is wrong, and with 125 when the
+commit cannot be tested, such as when it does not build, which Git then skips.
+The script compares the result with its expected value within a tolerance
+([](../../principles/testing.qmd#sec-float-tests)), and lies outside the
+history, such as in another directory, so that the same check runs on every
+commit. The search is fastest on a history of small commits that each work
+(@sec-index).

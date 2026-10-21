@@ -1,0 +1,269 @@
+---
+title: Workflow managers
+description: >-
+  A workflow manager runs the steps of a workflow in the order their files
+  require, in parallel where it can, and again only where something changed.
+  The ideas that Nextflow and Snakemake share and their names in each, which
+  to use where, and the rules that hold for both.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: Workflow_managers
+---
+
+# What a workflow manager does {#sec-overview .unnumbered}
+
+A workflow is a set of steps that hand files to each other: one step cleans the
+raw measurements of each station, the next fits a model to each, and a last one
+summarizes the fits. A shell script runs such steps one after the other, all of
+them, every time. A workflow manager is told instead what each step reads and
+writes, and works out the rest: the order in which the steps run, which of them
+run at once, where they run, on a laptop, a cluster, or in the cloud, and,
+after a change or a failure, which of them run again (@sec-model). Everything
+it does follows from what the steps declare, and nothing from what they do
+without declaring it.
+
+This document explains the ideas that Nextflow and Snakemake share, under the
+names each gives them (@sec-terms), says which to use where, and states the
+rules that hold for both; the documents of the tools say how. Its rules use the
+[normative language](../../principles/design.qmd#sec-normative) of *Design
+Principles*.
+
+|  | [Nextflow](nextflow.qmd) | [Snakemake](snakemake.qmd) |
+|------------|-----------------------------|-----------------------------|
+| Written in | Its own language, built on Groovy | Python, extended with rules |
+| Builds the graph | Forward, from the inputs, through channels | Backward, from the files asked for, by patterns of file names |
+| Knows a sample by | A value that travels with its files, such as an ID | The names of its files |
+| Keeps files | In a directory per task, from which the results are published | Where the rules say |
+| Runs again | With `-resume`, the tasks whose hash changed | On every run, the jobs whose outputs are missing or out of date |
+| Ready-made workflows | nf-core: maintained pipelines, mostly for genomics | The Snakemake workflow catalog, and wrappers for common tools |
+
+The two do the same job, on the same machines. Snakemake is the shorter way
+from a set of scripts to a workflow: its rules are Python, it thinks like Make,
+and its files lie where a reader looks for them. Nextflow is the way to run an
+nf-core pipeline, which exists for many standard analyses in genomics and is
+tested and released by a community, and the more common choice for workflows
+that run in the cloud. Within a project, stay with the manager that its
+workflows already use: the ideas carry over, the code does not. For a handful
+of steps on one machine, Make is enough; in R, the package targets does the job
+inside R.
+
+The principles already state what a workflow manager relies on: every step
+declares everything its outputs depend on
+([](../../principles/design.qmd#sec-declared-inputs)), writes all of its
+outputs or none ([](../../principles/design.qmd#sec-all-or-nothing)), and runs
+in a pinned environment ([](../../principles/design.qmd#sec-pin)), and the
+whole workflow is tested on a small dataset
+([](../../principles/design.qmd#sec-end-to-end)). The rules below add what
+follows from them for every workflow manager.
+
+
+# At a glance {#sec-at-a-glance .unnumbered}
+
+Every rule of this document in one line. The number and the title link to the
+rule.
+
+::: {.glance}
+| No. | Rule | In one line |
+|-----|------------------------------|----------------------------------------------------|
+| [-@sec-pin-manager] | [](#sec-pin-manager) | Run with an exact version of the manager, and a published workflow at a release. |
+| [-@sec-profiles] | [](#sec-profiles) | Declare the resources of each step in the workflow, and where it runs in a profile. |
+| [-@sec-thin] | [](#sec-thin) | Keep the computation in the scripts and packages that the steps call, not in the workflow. |
+| [-@sec-records] | [](#sec-records) | Keep the report, the configuration, and the commit of every run with its results. |
+:::
+
+
+# How workflow managers think {#sec-model}
+
+A workflow manager is a program that runs for as long as the workflow does. It
+reads the workflow, builds the graph of its jobs, starts each job when its
+inputs are ready, and waits. It computes nothing itself.
+
+
+## Steps, jobs, and the graph {#sec-graph}
+
+A step is a command with declared inputs and outputs, written once, such as
+"fit a model to the cleaned data of a station". A job is one run of a step on
+one input, such as the fit for station 007: a workflow of three steps over a
+hundred stations has some two hundred jobs. The manager connects each job that
+writes a file to the jobs that read it, and the jobs with these connections form
+a graph without cycles, a DAG, which the manager runs (@fig-graph).
+
+![The graph of a workflow with three stations. Each box is a job, one step run on one input, and each arrow a file that one job writes and the next reads. When `012.csv` changes, only the jobs in gray run again.](figures/graph.svg){#fig-graph}
+
+The graph decides the order, and nothing else does. A job runs as soon as all
+of its inputs exist, and jobs that do not depend on each other, such as the fits
+of two stations, run at the same time, as far as the cores of the machine or
+the jobs allowed on the cluster permit. The order in which the steps are
+written does not matter. A file that a step reads without declaring it has no
+connection in the graph: the job may run before the file is written, and does
+not run again when it changes.
+
+
+## Two ways to build the graph {#sec-pull-push}
+
+Snakemake builds the graph backward, from the files it is asked for, the
+targets. For each target, it finds the step whose output pattern matches the
+name, such as `results/fits/{station}.parquet` for
+`results/fits/007.parquet`, fills in the pattern to learn which inputs that job
+needs, and goes on from those, back to files that exist. This is how Make
+works. Nothing runs that no target needs, and file names are what connect the
+jobs.
+
+Nextflow builds it forward, from the inputs. The workflow puts the input files
+into channels, queues of values, and connects the steps by them: a step takes
+values from its input channels, runs a job for each, and sends its outputs into
+new channels, which feed the next steps. A value carries the identity of a
+sample, such as the code of a station beside its file, and the files have no
+names or places that matter until the results are published.
+
+Both describe the same graph, and both suit most workflows. They go wrong in
+different places: Snakemake when a name matches the wrong pattern
+([](snakemake.qmd#sec-patterns)), Nextflow when the values of two channels meet
+in the wrong pairs ([](nextflow.qmd#sec-identity)).
+
+
+## Only what changed runs again {#sec-rerun}
+
+After a change or a failure, a workflow manager runs again only the jobs that
+the change affects, and the jobs after them; it reuses the outputs of all
+others. This makes a workflow of many hours cheap to change, and it rests on
+one assumption: that the manager sees every change that matters. The two
+managers see different things.
+
+Snakemake looks at the outputs on disk. A job runs if one of its outputs is
+missing or older than one of its inputs, or if its code, parameters, or
+environment differ from those it recorded when it made them
+([](snakemake.qmd#sec-triggers)). It checks this on every run, without being
+asked. Nextflow keeps a cache: it computes a hash of the inputs, the script, and
+the environment of every task, and with `-resume`, it reuses a task whose hash
+it finds, together with the outputs left in its work directory
+([](nextflow.qmd#sec-resume)). Without `-resume`, it runs everything again.
+
+A change that the manager does not see makes nothing run again, and the old
+outputs stay, looking as valid as before
+([](../../principles/design.qmd#sec-loud)): a file that a script reads from a
+path of its own, a parameter that a script reads from the configuration instead
+of receiving it from the step, a library updated in an environment that is not
+pinned. In the other direction, a file that only looks changed, such as a
+copy whose times of modification are new, makes the jobs after it run again for
+nothing.
+
+
+## The manager decides, the executor runs {#sec-executor}
+
+The workflow manager does not run the jobs itself; an executor does: on the
+machine of the manager, as Slurm jobs on a cluster, or on a batch service in
+the cloud. The workflow stays the same, and only its settings for the place
+change, which both managers keep in profiles (@sec-profiles). On a cluster,
+every job is a Slurm job of its own, with the resources that its step asks for,
+and it gets those and no more ([](../scheduling/slurm.qmd#sec-request)).
+
+The manager runs for as long as the workflow, often for days, and while it is
+stopped, no new jobs start. It needs little, so most clusters let it run on a
+login node, in a session that survives logging out, such as one of `tmux`;
+where they do not, it runs as a long job of its own with one CPU. Started again
+after it stopped, it continues where it left off (@sec-rerun).
+
+
+## Each step brings its environment {#sec-environment}
+
+Each step names its environment, a container image or a Conda environment, and
+the manager pulls or creates it and starts the jobs of the step in it. Steps can
+so use tools whose dependencies conflict, and the environment becomes part of
+what a step declares: both managers run a step again when its environment
+changes. Pin every environment
+([](../../principles/design.qmd#sec-pin)), an image as [](../containers/index.qmd)
+describes. On a cluster, both managers run the containers with Apptainer, and
+pass on the options of [](../containers/apptainer.qmd#sec-host) only when told
+to.
+
+
+# Same ideas, different names {#sec-terms}
+
+The two managers name the same ideas differently, and some of their words mean
+something else in the other: a Snakemake *job* is a Nextflow *task*, and a
+Nextflow *job* is the Slurm job that runs a task.
+
+| Idea | Nextflow | Snakemake |
+|------------------|------------------------------|------------------------------|
+| A step | Process | Rule |
+| One run of a step | Task | Job |
+| What connects the steps | Channels of values | File names, matched by patterns with wildcards |
+| What the workflow makes | The outputs that the entry `workflow` publishes | The targets: the files named on the command line, or the inputs of the first rule, usually `all` |
+| The workflow | `main.nf`, with modules | `Snakefile`, with `.smk` files |
+| Parameters | `params`, from a `params` block, a configuration, and `--name value` | `config`, from a `configfile` and `--config name=value` |
+| Where jobs run | The executor, such as `process.executor = 'slurm'` | The executor, such as `--executor slurm`, from a plugin |
+| Settings for one place | A profile in `nextflow.config`, chosen with `-profile` | A profile, a directory with a `config.yaml`, chosen with `--profile` |
+| The environment of a step | The directives `container` and `conda` | The directives `container` and `conda`, used with `--sdm` |
+| Reuse after a change | With `-resume`, by the hash of each task | On every run, by the outputs on disk and their records |
+| The record of a run | `-with-report`, `-with-trace`, and `.nextflow.log` | `--report`, and `.snakemake/log/` |
+
+
+# Rules {#sec-rules}
+
+
+## Pin the manager, and the workflow {#sec-pin-manager}
+
+A workflow should state the exact version of the workflow manager it runs with,
+and a published workflow, such as an nf-core pipeline, should be run at a
+release. The manager is a tool that the results depend on like any other
+([](../../principles/design.qmd#sec-pin)), and its new versions change how a
+workflow runs, not only how fast. With version 26.04, for example, Nextflow
+began to parse every workflow in its strict syntax, under which a parameter set
+on the command line stays text unless its type is declared: `--save false` then
+gives the string `'false'`, which counts as true, and the workflow takes the
+other branch without a word.
+
+Pin Nextflow with `NXF_VER`, such as `NXF_VER=26.10.3 nextflow run …`, and
+require the version in `manifest.nextflowVersion`
+([](nextflow.qmd#sec-config)). Install Snakemake from a lock file of the
+workflow, into the environment from which it runs; `min_version` in a Snakefile
+states only the oldest version allowed. Run a published workflow with its
+release, such as `-r 3.27.0` for an nf-core pipeline, not with whatever its
+default branch holds today, and record the release with the results
+([](../../principles/design.qmd#sec-traceability)).
+
+
+## Resources in the workflow, the place in a profile {#sec-profiles}
+
+Each step should declare what one of its jobs needs, its CPUs, memory, and time,
+and the workflow should leave out where it runs: the executor, the partition and
+the account on a cluster, the directories for images and environments. These go
+into profiles, one per place, such as `slurm` for the cluster and `local` for a
+laptop. The same workflow then runs everywhere, and nothing about one cluster
+has to be edited out of it before it runs on another, or in continuous
+integration.
+
+A profile `test`, which runs the workflow on a small dataset on any machine, is
+then the test of [](../../principles/design.qmd#sec-end-to-end): every nf-core
+pipeline has one, run with `-profile test`.
+
+
+## The workflow wires, the steps compute {#sec-thin}
+
+The workflow should say what runs, on which files, and in which environment,
+and leave the computation to the scripts and packages that its steps call. Both
+managers accept code inline: Snakemake runs Python in the `run:` block of a
+rule, and Nextflow runs Groovy in closures and `exec:` blocks, in the process of
+the manager, outside the environment of any step. Science written there can be
+neither tested nor run without the workflow, nor reused by the next one. It
+belongs in library code
+([](../../principles/design.qmd#sec-library)), which a step calls through
+the command line of the package or a short script. Inline code then only
+wires: it builds lists of files, chooses a branch by the configuration, or
+renames, and the workflow holds little more than names, patterns, resources, and
+environments, which a reader can check at a glance.
+
+
+## Keep the record of every run {#sec-records}
+
+Every run whose results are kept should keep its record with them: the report
+of the manager, the configuration and parameters it ran with, and the commit of
+the workflow ([](../../principles/design.qmd#sec-traceability)). Nextflow writes
+its report with `-with-report` and `-with-trace`, and Snakemake with
+`snakemake --report report.html` after the run: which jobs ran, with which
+commands and environments, and what they used. The manager knows better than
+anyone afterwards what ran, but its logs, `.nextflow.log` and `.snakemake/log/`,
+lie hidden in the directory it ran in and do not travel with the results.

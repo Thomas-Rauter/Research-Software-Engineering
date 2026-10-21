@@ -1,0 +1,339 @@
+---
+title: Snakemake
+description: >-
+  What a research software engineer needs to know about Snakemake: that it
+  works backward from the files asked for, through rules whose patterns match
+  their names, and runs again what is out of date, and what follows from that,
+  and how to write rules, ask what would run, and run them on a laptop and a
+  cluster.
+order: 2
+format:
+  html: default
+  pdf:
+    output-file: Snakemake
+---
+
+# What Snakemake is {#sec-overview .unnumbered}
+
+Snakemake runs workflows written as rules, in a file named `Snakefile`, in
+Python extended with a syntax for rules. A rule says how to make files of one
+pattern from files of another, such as `results/fits/{station}.parquet` from
+`results/clean/{station}.parquet`. Like Make, Snakemake starts from the files it
+is asked for and works backward: it finds the rule whose output matches each
+name, then the files that rule needs, and so on, back to files that exist. It
+then runs the jobs whose outputs are missing or out of date, in order, and at
+the same time where it can. Almost everything that surprises newcomers follows
+from that: rules that never run, names that match the wrong rule, and jobs that
+run again, or do not (@sec-model). Working with Snakemake comes down to writing
+rules, asking what would run, and running them on a laptop or a cluster
+(@sec-usage).
+
+[](index.qmd) explains what Snakemake shares with Nextflow and states the rules
+for both.
+
+Checked against Snakemake 9.27.0.
+
+
+# How Snakemake thinks {#sec-model}
+
+Snakemake makes files. Every run starts from the files asked for, follows the
+rules backward to the files that exist, and then forward again, running each
+job whose outputs are missing or out of date.
+
+
+## Rules, wildcards, and jobs {#sec-rules}
+
+```python
+rule fit:
+    input:
+        "results/clean/{station}.parquet",
+    output:
+        "results/fits/{station}.parquet",
+    shell:
+        "stationfit fit {input} --output {output}"
+```
+
+A rule has inputs, outputs, and a way to make the one from the other: a shell
+command, a script, or Python code. `{station}` is a wildcard, which makes the
+output not a file but a pattern, matching every name of that form. A job is a
+rule with its wildcards filled in: asked for `results/fits/007.parquet`,
+Snakemake sets `station` to `007`, and the job needs
+`results/clean/007.parquet`. Wildcards take their values from the output only,
+so every wildcard of the inputs must appear in it. In the command, `{input}`
+and `{output}` stand for the files of the job.
+
+
+## Nothing runs that no target asks for {#sec-targets}
+
+Snakemake makes its targets: the files named on the command line, or, without
+any, the inputs of the first rule of the Snakefile, by convention a rule `all`
+that only lists the final results. It does not look at what the directories
+hold, only at what the targets need. A rule that no target needs, directly or
+through other rules, never runs, and a new station in `data/raw/` is not
+processed until a target names a result of it. The list of the stations
+therefore belongs in the configuration, from which `expand` makes the list of
+targets (@sec-snakefile); `glob_wildcards` reads it from the names of existing
+files instead, where a directory is the list.
+
+The same model makes it cheap to ask for less: `snakemake
+results/fits/007.parquet` runs only what this one file needs.
+
+
+## A wildcard matches anything {#sec-patterns}
+
+A wildcard matches any text of at least one character, slashes and dots
+included. The output `results/{station}.parquet` also matches
+`results/fits/007.parquet`, with `station` set to `fits/007`. Snakemake decides
+which rule makes a file by which rule's inputs it can find or make, and stops
+with an `AmbiguousRuleException` where it could use both, so the outcome
+depends on which files happen to exist. Give the outputs of each rule a
+directory of their own, such as `results/clean/` and `results/fits/`, and
+constrain the wildcards whose values have a form, such as with
+`wildcard_constraints` and `station=r"\d{3}"` (@sec-snakefile). A file name is
+the interface between two rules, like the signature of a function.
+
+The values of a wildcard are text, and so are the codes of stations in the
+configuration only when quoted. YAML reads `[007, 012]` as the numbers 7 and
+10, the second in octal, and Snakemake then looks for `data/raw/7.csv` and
+`data/raw/10.csv`; write `["007", "012"]`.
+
+
+## Out of date: what makes a job run again {#sec-triggers}
+
+A job runs if one of its outputs is missing, or if Snakemake finds a reason in
+what it recorded when it last made them, in `.snakemake/metadata/`:
+
+| Trigger | The job runs again when |
+|----------------|----------------------------------------------------------------|
+| `mtime` | An input is newer than the outputs; for an input of up to 1 MB, only if its checksum has changed too |
+| `input` | The set of its input files has changed |
+| `params` | A value of its `params` has changed |
+| `code` | Its command or its script has changed, even if only by a comment |
+| `software-env` | Its Conda environment or its container has changed |
+
+Every job that reads what a job made again runs as well, down to the targets.
+`snakemake --dry-run` lists each job that would run, with its reason
+(@sec-dry-run).
+
+Snakemake sees only what the rule declares. A value of the configuration that a
+script reads itself, such as `snakemake.config["threshold"]`, is no parameter of
+the rule: changing it runs nothing again, and the old results stay
+([](../../principles/design.qmd#sec-declared-inputs)). Pass every value that a
+step uses through `params`. A module that the script imports, or a package
+updated in an environment that is not pinned, is no part of the rule's code
+either.
+
+The times of the files mislead in both directions. A large input copied without
+its times, such as onto a new disk, makes everything after it run again,
+although nothing changed; `ancient()` around an input tells Snakemake to ignore
+its time. `snakemake --touch` marks every output as up to date without running
+anything, even outputs whose parameters have changed. That is right after
+moving a finished workflow and wrong after any change: it hides exactly the
+stale outputs that the triggers are there to find.
+
+
+## A failed job leaves nothing behind {#sec-incomplete}
+
+Snakemake runs shell commands with Bash in strict mode, `set -euo pipefail`, so
+a command whose pipe fails halfway fails
+([](../../principles/design.qmd#sec-all-or-nothing)). When a job fails,
+Snakemake deletes its outputs, which may be incomplete, and keeps its log, to
+find out why.
+
+When Snakemake itself is killed, such as by the time limit of the job it runs
+in, the outputs of the jobs that were running stay, marked as incomplete, and
+the next run refuses to start until told what to do with them:
+`--rerun-incomplete` makes them again. A killed run also leaves the directory
+locked; `snakemake --unlock` releases it, once no other run is using it.
+
+
+# Working with Snakemake {#sec-usage}
+
+The examples are a workflow that cleans the measurements of each station, fits
+a model to each, and summarizes the fits. A package does the science, with a
+command for each step, `stationfit clean` and `stationfit fit`, and a function
+for the summary ([](index.qmd#sec-thin)).
+
+
+## Lay out a workflow {#sec-layout}
+
+```default
+workflow/
+    Snakefile           the rules
+    envs/               one Conda environment per step
+    scripts/            the scripts that rules run with script:
+config/
+    config.yaml         the stations and the parameters
+profiles/
+    slurm/config.yaml   the settings for the cluster
+    test/config.yaml    the settings for the test
+.tests/                 a small dataset, with a config/ of its own
+results/                what the workflow makes
+logs/                   what its jobs report
+```
+
+Snakemake runs in the directory it is started from, the top of this layout, and
+finds `workflow/Snakefile` by itself. The paths of inputs, outputs, logs, and
+the configuration are relative to that directory, and those of `script:` and
+`conda:` relative to the Snakefile. A large workflow splits its rules into files
+of their own, such as `workflow/rules/fit.smk`, which the Snakefile includes
+with `include: "rules/fit.smk"`.
+
+
+## Write the rules {#sec-snakefile}
+
+```python
+# workflow/Snakefile
+configfile: "config/config.yaml"
+
+
+wildcard_constraints:
+    station=r"\d{3}",
+
+
+rule all:
+    input:
+        "results/summary.parquet",
+
+
+rule clean:
+    input:
+        "data/raw/{station}.csv",
+    output:
+        "results/clean/{station}.parquet",
+    conda:
+        "envs/stationfit.yaml"
+    shell:
+        "stationfit clean {input} --output {output}"
+
+
+rule fit:
+    input:
+        "results/clean/{station}.parquet",
+    output:
+        "results/fits/{station}.parquet",
+    params:
+        seed=config["seed"],
+    threads: 4
+    resources:
+        mem_mb=8000,
+        runtime=60,
+    log:
+        "logs/fit/{station}.log",
+    conda:
+        "envs/stationfit.yaml"
+    shell:
+        "stationfit fit {input} --output {output} "
+        "--seed {params.seed} --threads {threads} 2> {log}"
+
+
+rule summarize:
+    input:
+        expand("results/fits/{station}.parquet", station=config["stations"]),
+    output:
+        "results/summary.parquet",
+    conda:
+        "envs/stationfit.yaml"
+    script:
+        "scripts/summarize.py"
+```
+
+```yaml
+# config/config.yaml
+stations: ["007", "012", "031"]
+seed: 42
+```
+
+`expand` fills the pattern with every station of the configuration, and so
+makes the inputs of `summarize`, the one job that needs all fits. `params`
+carries the seed into the command and into the records of the job, so that a
+new seed runs the fits again (@sec-triggers). `threads` is the number of CPUs
+of a job, which `{threads}` passes to the program, and `resources` its memory,
+in megabytes, and its time, in minutes, which a cluster grants it (@sec-run).
+`log` names a file for the messages of the job, which the command writes into
+itself, here with `2> {log}`.
+
+```python
+# workflow/scripts/summarize.py
+from stationfit import summarize
+
+summarize(list(snakemake.input), output=snakemake.output[0])
+```
+
+A script named by `script:` receives an object `snakemake` with the inputs,
+outputs, parameters, threads, and wildcards of its job, such as
+`snakemake.input` and `snakemake.params.seed`; in R, `snakemake@input` and
+`snakemake@params[["seed"]]`. Such a script runs only under Snakemake, so keep
+it to a few lines that call the package, which can be tested without it.
+
+
+## Ask what would run {#sec-dry-run}
+
+```bash
+snakemake --dry-run                           # the jobs that would run, and why
+snakemake --dry-run results/fits/007.parquet  # only what this file needs
+snakemake --summary                           # every output, with its state
+snakemake --dag | dot -Tsvg > dag.svg         # the graph, as a figure
+snakemake --forcerun fit                      # run fit again, and what follows
+```
+
+A dry run takes a second and shows what Snakemake makes of the targets, the
+rules, and the files on disk, with the reason for each job (@sec-triggers). Run
+one before every real run; a job that should not run, or a hundred jobs where
+three were expected, shows up there rather than in the results. `--summary`
+lists every output with its date, its rule, and whether it would be made again.
+
+
+## Run on a laptop and on a cluster {#sec-run}
+
+```bash
+snakemake --cores 8 --sdm conda      # on this machine
+snakemake --profile profiles/slurm   # on the cluster
+snakemake --profile profiles/test    # the test, on any machine
+```
+
+On a single machine, `--cores` is required, and it caps the CPUs of all jobs
+that run at once. `--sdm conda` creates the environment of each rule from its
+file, once, in `.snakemake/conda/`, and runs the jobs of the rule in it;
+`--sdm apptainer` does the same with the images of `container:`, and
+`--apptainer-args` passes options to Apptainer, such as those of
+[](../containers/apptainer.qmd#sec-host). An environment file may name only
+packages, without versions; a pin file beside it, such as
+`envs/stationfit.linux-64.pin.txt`, which `snakedeploy pin-conda-envs` writes,
+fixes every version ([](../../principles/design.qmd#sec-pin)).
+
+```yaml
+# profiles/slurm/config.yaml
+executor: slurm
+jobs: 100
+software-deployment-method: conda
+default-resources:
+  slurm_partition: cpu
+  slurm_account: ocean-lab
+  mem_mb: 2000
+  runtime: 30
+```
+
+A profile is a directory with a file `config.yaml`, whose keys are the options
+of the command line without their dashes ([](index.qmd#sec-profiles)). On a
+cluster, the executor `slurm`, from the package
+`snakemake-executor-plugin-slurm`, submits every job as a Slurm job, with the
+`threads` and `resources` of its rule, and `jobs` limits how many wait or run
+at once. `default-resources` holds for every rule that does not set its own.
+Snakemake itself runs on the login node, where the cluster allows it, in a
+session that survives logging out ([](index.qmd#sec-executor)).
+
+```yaml
+# profiles/test/config.yaml
+directory: .tests
+cores: 2
+software-deployment-method: conda
+```
+
+The test runs the same workflow in `.tests/`, which holds a small dataset in
+`data/raw/` and a configuration of its own in `config/config.yaml`, so that its
+results never mix with the real ones
+([](../../principles/design.qmd#sec-end-to-end)). After a run that counts,
+`snakemake --report report.html`, with the same options, writes a report of the
+jobs, their code, parameters, environments, and run times
+([](index.qmd#sec-records)); it needs the Python package pygments.

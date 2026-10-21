@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The history of a repository (Git, "How Git thinks"). Each white box is a
+     commit, with its hash, and points to its parent. The gray boxes are
+     names: the branches main and feature, the tag v1.0.0, HEAD, and the
+     remote-tracking branch origin/main, one commit behind main. The white
+     background keeps the figure legible in dark mode. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 220" width="650" height="220"
+     font-family="DejaVu Sans Mono, Menlo, Consolas, monospace" font-size="12">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000000"/>
+    </marker>
+  </defs>
+  <rect width="650" height="220" fill="#ffffff"/>
+
+  <!-- Each commit points to its parent. -->
+  <g stroke="#000000" marker-end="url(#arrow)">
+    <line x1="170" y1="125" x2="121" y2="125"/>
+    <line x1="300" y1="125" x2="251" y2="125"/>
+    <line x1="430" y1="125" x2="381" y2="125"/>
+    <line x1="300" y1="180" x2="236" y2="141"/>
+    <line x1="430" y1="190" x2="381" y2="190"/>
+  </g>
+
+  <!-- Each name points to a commit, or HEAD to a branch. -->
+  <g stroke="#000000" stroke-dasharray="4 3" marker-end="url(#arrow)">
+    <line x1="80" y1="83" x2="80" y2="109"/>
+    <line x1="340" y1="83" x2="340" y2="109"/>
+    <line x1="470" y1="83" x2="470" y2="109"/>
+    <line x1="470" y1="35" x2="470" y2="55"/>
+    <line x1="545" y1="190" x2="511" y2="190"/>
+  </g>
+
+  <!-- The commits. -->
+  <g stroke="#000000" fill="#ffffff">
+    <rect x="40" y="110" width="80" height="30"/>
+    <rect x="170" y="110" width="80" height="30"/>
+    <rect x="300" y="110" width="80" height="30"/>
+    <rect x="430" y="110" width="80" height="30"/>
+    <rect x="300" y="175" width="80" height="30"/>
+    <rect x="430" y="175" width="80" height="30"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="80" y="129">3f9c2a1</text>
+    <text x="210" y="129">8b41d07</text>
+    <text x="340" y="129">c52e9fa</text>
+    <text x="470" y="129">d4e6f81</text>
+    <text x="340" y="194">e07d5b2</text>
+    <text x="470" y="194">94af3e8</text>
+  </g>
+
+  <!-- The names. -->
+  <g stroke="#000000" fill="#e0e0e0">
+    <rect x="45" y="56" width="70" height="26"/>
+    <rect x="290" y="56" width="100" height="26"/>
+    <rect x="440" y="56" width="60" height="26"/>
+    <rect x="440" y="8" width="60" height="26"/>
+    <rect x="545" y="177" width="74" height="26"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="80" y="73">v1.0.0</text>
+    <text x="340" y="73">origin/main</text>
+    <text x="470" y="73">main</text>
+    <text x="470" y="25">HEAD</text>
+    <text x="582" y="194">feature</text>
+  </g>
+</svg>
