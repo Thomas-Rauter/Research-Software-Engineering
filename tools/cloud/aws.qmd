@@ -6,6 +6,7 @@ description: >-
   paid for as long as it exists, and how to log in, keep data in S3, and run
   machines on EC2.
 order: 1
+image: ../../logos/aws.svg
 format:
   html: default
   pdf:

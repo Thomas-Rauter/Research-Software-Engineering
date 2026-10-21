@@ -1,0 +1,468 @@
+---
+title: Python
+description: >-
+  What a research software engineer needs from Python: what it is used for and
+  where it is weak, how names, objects, and mutation work, the syntax that most
+  code is made of, the tools for environments, tests, and checks, and the rules
+  that apply the principles to Python.
+order: 1
+image: ../logos/python.svg
+format:
+  html: default
+  pdf:
+    output-file: Python
+---
+
+# What Python is {#sec-overview .unnumbered}
+
+Python is a general-purpose, interpreted language with dynamic types and blocks
+marked by indentation. It reads close to pseudocode, and its core is small. The
+work is done by libraries: NumPy for arrays, pandas and Polars for tables,
+SciPy for numerics, Matplotlib for plots, scikit-learn and PyTorch for machine
+learning. Most of them are compiled code in C, C++, Fortran, or Rust behind a
+Python interface, so a Python program is mostly glue that reads data, calls
+these libraries, and writes results.
+
+That makes Python one of the most widely used languages of research software,
+in academia and in industry, for analysis scripts, notebooks, libraries, the
+steps of workflows ([](../tools/workflows/index.qmd)), and services
+([](../tools/services/fastapi.qmd)). It is slow only where the work happens in
+Python itself: a loop over millions of elements runs far slower than the same
+operation on an array. Express such work as array operations
+(@sec-arrays), and only when that is not enough, move the hot spot to compiled
+code, for example with Numba, Cython, or Rust. Performance ranks below
+correctness and clarity
+([](../principles/design.qmd#sec-quality)), so measure before optimizing.
+Threads do not speed up pure Python code, because of the global interpreter
+lock; parallelism comes from processes or from compiled libraries.
+
+Working in Python comes down to a mental model (@sec-model), a small set of
+syntax (@sec-syntax), and a few tools (@sec-tooling). The rules at the end
+(@sec-rules) apply the principles to Python.
+
+Checked against Python 3.12, uv 0.13, Ruff 0.17, and pytest 9.
+
+
+# At a glance {#sec-at-a-glance .unnumbered}
+
+Every rule of this document in one line. The number and the title link to the
+rule.
+
+::: {.glance}
+| No. | Rule | In one line |
+|-----|------------------------------|----------------------------------------------------|
+| [-@sec-mutable-defaults] | [](#sec-mutable-defaults) | A default value must not be a mutable object. |
+| [-@sec-pyproject] | [](#sec-pyproject) | Declare the dependencies in `pyproject.toml`, and commit a lock file for workflow code. |
+| [-@sec-docstrings] | [](#sec-docstrings) | Every user-facing function should have a docstring that states units, shapes, and defaults. |
+:::
+
+
+# How Python thinks {#sec-model}
+
+Three facts explain most of the surprises of Python in research software: a
+name refers to an object and never holds a copy of it (@sec-names), types are
+checked only when the code runs (@sec-types), and importing a module runs it
+(@sec-modules).
+
+
+## A name refers to an object {#sec-names}
+
+Assignment binds a name to an object and never copies it. After `b = a`, there
+is one object with two names, and a change made through one name shows through
+the other:
+
+```python
+a = [1, 2, 3]
+b = a              # a second name for the same list, not a copy
+b.append(4)
+print(a)           # [1, 2, 3, 4]
+c = a.copy()       # a copy: changing c leaves a alone
+```
+
+Numbers, strings, and tuples are immutable, so sharing them is harmless. Lists,
+dictionaries, sets, NumPy arrays, and pandas data frames are mutable, and a
+function receives the very objects its caller passed. A function that changes
+its argument therefore changes the data of its caller, which is the defect that
+[](../principles/design.qmd#sec-mutation) warns about. Copy first, or build a
+new object and return it.
+
+A slice of a NumPy array is a view on the same memory, not a copy, unlike a
+slice of a list. Indexing with a mask or a list of indices does copy:
+
+```python
+x = np.arange(5)
+y = x[:3]          # a view on x
+y[0] = 99          # x[0] is now 99 as well
+z = x[:3].copy()   # a copy, independent of x
+```
+
+
+## Types are checked when the code runs {#sec-types}
+
+A name has no type, its object has one, and Python checks the types of the
+operands only when a line runs. A wrong type therefore shows up deep inside a
+long job instead of at the start. Python is duck-typed: a function works with
+any object that supports the operations it uses, whether a list, a NumPy array,
+or a pandas series. Type hints, such as `x: float`, document the types and let a
+type checker, such as mypy or pyright, find mismatches before the code runs;
+Python itself ignores them.
+
+Two facts about numbers matter in research software. An `int` has unlimited
+size, but a `float` is an IEEE 754 double, so `0.1 + 0.2 == 0.3` is `False`;
+compare with `math.isclose` or `numpy.isclose`, and in tests with
+`pytest.approx` ([](../principles/testing.qmd#sec-float-tests)). And `/` always
+divides as floats, while `//` rounds down.
+
+
+## Importing a module runs it {#sec-modules}
+
+A file `.py` is a module, and a folder of modules with an `__init__.py` is a
+package. `import` runs the top level of a module once, so code at the top level
+of a module runs at import
+([](../principles/design.qmd#sec-import)). Put the work of a script behind a
+guard, so that the file can be imported without running it:
+
+```python
+def main():
+    ...
+
+if __name__ == "__main__":   # true only when the file is run directly
+    main()
+```
+
+Install your own code as a package instead of changing `sys.path`: with uv,
+`uv sync` installs the project in its environment (@sec-uv), and its modules
+import from anywhere.
+
+
+# Essential syntax {#sec-syntax}
+
+The following is the part of Python that most research code is made of.
+
+
+## Values and collections {#sec-values}
+
+```python
+n = 3                         # int
+rate = 0.05                   # float
+name = "station-7"            # str
+ok = True                     # bool
+nothing = None                # the absence of a value
+
+values = [2.5, 3.1, 4.0]      # list: ordered, mutable
+point = (52.5, 13.4)          # tuple: ordered, immutable
+ages = {"ana": 31, "bo": 28}  # dict: key to value, in insertion order
+unique = {1, 2, 2, 3}         # set: {1, 2, 3}
+
+values[0], values[-1], values[1:]   # first, last, all but the first
+ages["ana"]                         # 31; a missing key raises KeyError
+ages.get("cy", 0)                   # 0, the default for a missing key
+f"{name} has {len(values)} values"  # an f-string
+```
+
+
+## Conditionals and loops {#sec-control}
+
+```python
+if rate > 0.1:
+    print("high")
+elif rate > 0:
+    print("low")
+else:
+    print("zero")
+
+for v in values:                       # over the items
+    print(v)
+for i, v in enumerate(values):         # with the index
+    print(i, v)
+for k, v in ages.items():              # over a dictionary
+    print(k, v)
+for a, b in zip(values, values[1:]):   # in pairs
+    print(b - a)
+while n > 0:                           # break and continue work as usual
+    n -= 1
+
+squares = [v**2 for v in values]                       # list comprehension
+adults = {k: v for k, v in ages.items() if v >= 30}    # dict comprehension
+```
+
+In a condition, `0`, `None`, `""`, and every empty collection count as false.
+A NumPy array with more than one element is neither true nor false and raises
+an error; ask `.any()` or `.all()`.
+
+
+## Functions {#sec-functions}
+
+```python
+def drift_rate(
+    distance_m: float, days: float, *, per_year: bool = False
+) -> float:
+    """Mean drift rate of a station.
+
+    Parameters
+    ----------
+    distance_m : float
+        Distance moved, in meters.
+    days : float
+        Time span, in days; must be positive.
+    per_year : bool, default False
+        Return meters per year instead of meters per day.
+
+    Returns
+    -------
+    float
+        The rate, in meters per day or per year.
+    """
+    if days <= 0:
+        raise ValueError(f"days must be positive, got {days}")
+    rate = distance_m / days
+    return rate * 365.25 if per_year else rate
+
+drift_rate(12.0, 30)                       # by position
+drift_rate(12.0, days=30, per_year=True)   # by keyword
+```
+
+The `*` makes every parameter after it keyword-only, so a caller must name
+`per_year` and cannot mix up flags. A function without `return` returns
+`None`, and `return a, b` returns a tuple. The docstring is in the NumPy style;
+the Google style is the other common one.
+
+
+## Classes {#sec-classes}
+
+Research code needs fewer classes than one might expect. For a record of
+related values, a frozen data class is enough:
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)       # frozen: assigning to a field is an error
+class Station:
+    name: str
+    latitude: float
+    longitude: float
+
+    def label(self) -> str:
+        return f"{self.name} ({self.latitude}, {self.longitude})"
+
+s = Station("Alpha", 52.5, 13.4)
+s.label()                     # 'Alpha (52.5, 13.4)'
+```
+
+
+## Errors {#sec-errors}
+
+```python
+try:
+    rate = drift_rate(12.0, 0)
+except ValueError as err:     # catch the specific error, never a bare except
+    print(f"skipped: {err}")
+else:
+    print(rate)               # runs only if nothing was raised
+finally:
+    print("done")             # runs in any case
+```
+
+Raise an exception for what the caller must fix, warn with `warnings.warn` for
+what the result can survive
+([](../principles/design.qmd#sec-output)), and catch only what you can handle.
+
+
+## Files and paths {#sec-files}
+
+```python
+from pathlib import Path
+import json
+
+path = Path("data") / "stations.json"      # join paths with /, not with +
+path.parent.mkdir(parents=True, exist_ok=True)
+with path.open("w") as f:                  # closed when the block ends
+    json.dump({"a": 1}, f)
+config = json.loads(path.read_text())
+sorted(Path("data").glob("*.json"))        # the files that match a pattern
+```
+
+
+## Arrays and tables {#sec-arrays}
+
+NumPy applies an operation to a whole array at once, in compiled code. Write
+array expressions instead of loops:
+
+```python
+import numpy as np
+
+x = np.array([1.0, 2.0, 4.0, 8.0])
+x * 2 + 1                       # element by element, no loop
+x[x > 1.5]                      # a mask: [2., 4., 8.]
+np.mean(x), np.std(x, ddof=1)   # ddof=1: the sample standard deviation
+m = np.arange(6).reshape(2, 3)
+m.sum(axis=0)                   # sums over the rows: one value per column
+m - m.mean(axis=0)              # broadcasting: subtract each column's mean
+```
+
+Defaults differ between the libraries, and the difference is a number that is
+wrong without a warning ([](../principles/design.qmd#sec-numeric-defaults)):
+`np.std(x)` divides by `n`, but `pandas.Series.std()` divides by `n - 1`, and
+`np.mean` of an array with a `nan` is `nan`, but pandas skips missing values
+unless told not to. State the choice, as in `ddof=1`, and `skipna=False` where
+a missing value must not be dropped
+([](../principles/design.qmd#sec-missing)).
+
+pandas holds tables with named columns:
+
+```python
+import pandas as pd
+
+df = pd.read_csv("measurements.csv")          # a table
+df["temp_k"] = df["temp_c"] + 273.15          # a new column
+warm = df[df["temp_c"] > 20]                  # rows by a condition
+df.groupby("station")["temp_c"].mean()        # the mean per station
+df.merge(stations, on="station", how="left")  # join two tables
+```
+
+
+# Tooling {#sec-tooling}
+
+| Job | Tool |
+|-------------------------------|---------------------------------------------|
+| Python version, environment, dependencies, lock file | uv; pip and venv are the baseline; conda or pixi when packages need non-Python libraries |
+| Project metadata and tool settings | `pyproject.toml` |
+| Tests | pytest; Hypothesis for property-based tests |
+| Lint and format | Ruff |
+| Types | mypy or pyright |
+| Reference documentation | docstrings, built with Sphinx or MkDocs |
+| Notebooks and reports | Jupyter, Quarto |
+
+
+## A project with uv {#sec-uv}
+
+uv manages the Python version, the virtual environment, the dependencies, and
+the lock file `uv.lock` in one tool:
+
+```bash
+uv init --lib stationfit    # a new package with pyproject.toml and src/
+cd stationfit
+uv add numpy pandas         # add dependencies, and update the lock file
+uv add --dev pytest ruff    # dependencies for development only
+uv sync                     # create .venv exactly as uv.lock says
+uv run pytest               # run a command in the project's environment
+uv lock --upgrade           # deliberately update the locked versions
+```
+
+`pyproject.toml` declares what the project needs, and `uv.lock` records the
+exact versions that were resolved from it. `uv add` writes the newest version
+as a lower bound; loosen it to the oldest version that works, in a library
+(@sec-pyproject). Commit both files, and never `.venv/`.
+
+```toml
+[project]
+name = "stationfit"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["numpy>=2.0", "pandas>=2.2"]
+
+[dependency-groups]
+dev = ["pytest", "ruff"]
+```
+
+
+## Test with pytest {#sec-pytest}
+
+pytest collects the functions `test_*` in the files `test_*.py` and runs them.
+A plain `assert` is enough; pytest shows the values when it fails.
+
+```python
+import pytest
+from stationfit import drift_rate
+
+def test_drift_rate_per_day():
+    assert drift_rate(12.0, 30) == pytest.approx(0.4)   # relative tolerance
+
+@pytest.mark.parametrize("days", [0, -1])               # one test per value
+def test_nonpositive_days_raise(days):
+    with pytest.raises(ValueError):
+        drift_rate(12.0, days)
+```
+
+```bash
+uv run pytest             # all tests
+uv run pytest -x          # stop at the first failure
+uv run pytest -k drift    # only tests with "drift" in their name
+uv run pytest --lf        # only the tests that failed last time
+```
+
+`pytest.approx` compares floats with a tolerance
+([](../principles/testing.qmd#sec-float-tests)), and `pytest.raises` tests the
+edges ([](../principles/testing.qmd#sec-edges)).
+
+
+## Check with Ruff {#sec-ruff}
+
+```bash
+uv run ruff check           # lint
+uv run ruff check --fix     # lint, and fix what can be fixed safely
+uv run ruff format          # format
+```
+
+Ruff's rules are chosen in `pyproject.toml`. The rule sets `F` (pyflakes), `B`
+(bugbear), and `NPY` (NumPy) find real defects, such as unused names, mutable
+defaults, and removed NumPy functions:
+
+```toml
+[tool.ruff.lint]
+select = ["E", "F", "B", "NPY"]
+```
+
+
+# Rules {#sec-rules}
+
+
+## No mutable default arguments {#sec-mutable-defaults}
+
+A default value of a parameter must not be a mutable object, such as a list, a
+dictionary, a set, or an array. Python evaluates the default once, when `def`
+runs, not at each call, so all calls share one object, and whatever a call
+appends to it, the next call finds:
+
+```python
+def collect(x, acc=[]):       # wrong: one list for all calls
+    acc.append(x)
+    return acc
+
+collect(1)                    # [1]
+collect(2)                    # [1, 2], not [2]
+
+def collect(x, acc=None):     # right: a new list at each call
+    if acc is None:
+        acc = []
+    acc.append(x)
+    return acc
+```
+
+The function then returns different results for the same arguments, depending
+on the calls before it, which is global state
+([](../principles/design.qmd#sec-global-state)). Ruff's rule `B006` finds it.
+
+
+## Declare the dependencies, and lock them for workflow code {#sec-pyproject}
+
+Every project should declare in `pyproject.toml` the Python version it needs
+(`requires-python`) and every package it imports. A library declares the range
+of versions that it works with, as its users install it next to other packages;
+workflow code should in addition commit a lock file, such as `uv.lock`, which
+pins the exact versions ([](../principles/design.qmd#sec-pin)). The lock file
+is part of the recipe of the results
+([](../principles/design.qmd#sec-recipe)), so keep it in the repository of the
+code. A workflow that runs in a container image records the digest of the image
+instead ([](../tools/containers/index.qmd#sec-record)).
+
+
+## Every user-facing function has a docstring {#sec-docstrings}
+
+A user-facing function should have a docstring in one style, NumPy or Google,
+that states what the function computes, and for every parameter and the return
+value its meaning, shape, unit, and default
+([](../principles/documenting.qmd#sec-reference)). Tools build the reference
+from the docstrings, and `help(drift_rate)` shows them, so they stay next to
+the code they describe. Use type hints for the types, and spend the words of
+the docstring on what the signature cannot say.

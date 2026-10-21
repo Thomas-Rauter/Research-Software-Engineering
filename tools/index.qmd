@@ -13,14 +13,14 @@ of its own. A job or a tool without a link has no document yet.
 
 | Job | Tools |
 |-----|-------|
-| Cloud computing | [AWS](cloud/aws.qmd) |
-| [Containers](containers/index.qmd) | [Apptainer](containers/apptainer.qmd), [Docker](containers/docker.qmd) |
-| Data formats and storage | [Parquet](data/parquet.qmd), [HDF5](data/hdf5.qmd), [Zarr](data/zarr.qmd) |
-| Experiment tracking | [MLflow](tracking/mlflow.qmd) |
-| HPC scheduling | [Slurm](scheduling/slurm.qmd) |
-| Services | [FastAPI](services/fastapi.qmd) |
-| Version control and CI | [Git](version-control/git.qmd), [GitHub Actions](version-control/github-actions.qmd) |
-| [Workflow managers](workflows/index.qmd) | [Nextflow](workflows/nextflow.qmd), [Snakemake](workflows/snakemake.qmd) |
+| Cloud computing | [AWS](cloud/aws.qmd) ![](../logos/aws.svg){.logo} |
+| [Containers](containers/index.qmd) | [Apptainer](containers/apptainer.qmd) ![](../logos/apptainer.svg){.logo}, [Docker](containers/docker.qmd) ![](../logos/docker.svg){.logo} |
+| Data formats and storage | [Parquet](data/parquet.qmd) ![](../logos/parquet.svg){.logo}, [HDF5](data/hdf5.qmd) ![](../logos/hdf5.svg){.logo}, [Zarr](data/zarr.qmd) ![](../logos/zarr.svg){.logo} |
+| Experiment tracking | [MLflow](tracking/mlflow.qmd) ![](../logos/mlflow.svg){.logo} |
+| HPC scheduling | [Slurm](scheduling/slurm.qmd) ![](../logos/slurm.svg){.logo} |
+| Services | [FastAPI](services/fastapi.qmd) ![](../logos/fastapi.svg){.logo} |
+| Version control and CI | [Git](version-control/git.qmd) ![](../logos/git.svg){.logo}, [GitHub Actions](version-control/github-actions.qmd) ![](../logos/github-actions.svg){.logo} |
+| [Workflow managers](workflows/index.qmd) | [Nextflow](workflows/nextflow.qmd) ![](../logos/nextflow.svg){.logo}, [Snakemake](workflows/snakemake.qmd) ![](../logos/snakemake.svg){.logo} |
 
 Like a language document, a tool document mixes rules, which carry the
 [normative language](../principles/design.qmd#sec-normative) of *Design

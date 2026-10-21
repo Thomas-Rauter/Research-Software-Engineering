@@ -5,6 +5,7 @@ description: >-
   Dockerfiles, building, pulling, and pushing images, running programs in
   containers isolated from the host, and running services.
 order: 2
+image: ../../logos/docker.svg
 format:
   html: default
   pdf:

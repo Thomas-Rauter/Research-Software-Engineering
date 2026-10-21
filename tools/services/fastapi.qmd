@@ -5,6 +5,7 @@ description: >-
   of a function become the contract of a web service and what follows from
   that, and how to write, run, call, and test a service that serves a model.
 order: 1
+image: ../../logos/fastapi.svg
 format:
   html: default
   pdf:

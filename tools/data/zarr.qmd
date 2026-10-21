@@ -5,6 +5,7 @@ description: >-
   arrays as one file or object per chunk and what follows from that, and how to
   write, read, and inspect Zarr arrays with zarr-python and xarray.
 order: 3
+image: ../../logos/zarr.svg
 format:
   html: default
   pdf:

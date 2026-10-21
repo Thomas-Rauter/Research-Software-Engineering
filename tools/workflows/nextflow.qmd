@@ -6,6 +6,7 @@ description: >-
   its own, and what follows from that, and how to write, configure, run,
   resume, and debug a pipeline, and run one of nf-core.
 order: 1
+image: ../../logos/nextflow.svg
 format:
   html: default
   pdf:

@@ -8,6 +8,7 @@ description: >-
   used most, how to pass files and values on, release a version, follow and
   debug runs, and keep the actions current.
 order: 2
+image: ../../logos/github-actions.svg
 format:
   html: default
   pdf:

@@ -6,6 +6,7 @@ description: >-
   scripts, submit and follow jobs, run many of them, and find out what they
   used.
 order: 1
+image: ../../logos/slurm.svg
 format:
   html: default
   pdf:

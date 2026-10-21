@@ -7,6 +7,7 @@ description: >-
   and how to write rules, ask what would run, and run them on a laptop and a
   cluster.
 order: 2
+image: ../../logos/snakemake.svg
 format:
   html: default
   pdf:

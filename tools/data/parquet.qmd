@@ -5,6 +5,7 @@ description: >-
   a table column by column and what follows from that, and how to read, query,
   write, and inspect Parquet files from Python, R, and SQL.
 order: 1
+image: ../../logos/parquet.svg
 format:
   html: default
   pdf:

@@ -23,6 +23,11 @@
 -- PDF. Links to other pages point to the website, and a div with the class
 -- definitionbox or typecard becomes the LaTeX environment of that name,
 -- which style/header.tex defines.
+--
+-- Logos. A page of a language or a tool names its logo in `image`, a path
+-- relative to the page, such as ../logos/python.svg. The title shows it: in
+-- the website by a rule of CSS for the page, in the PDF by \doclogo, which
+-- style/header.tex puts beside the title.
 
 local LEVEL_WORDS = { "Section", "Subsection", "Subsubsection" }
 local LATEX_ENVIRONMENTS = { definitionbox = true, typecard = true }
@@ -192,11 +197,50 @@ local function environment(div)
   return nil
 end
 
+local function add_header(meta, block)
+  local includes = meta["header-includes"]
+  if includes == nil then
+    includes = pandoc.MetaList({})
+  elseif includes.t ~= "MetaList" then
+    includes = pandoc.MetaList({ includes })
+  end
+  includes:insert(pandoc.MetaBlocks({ block }))
+  meta["header-includes"] = includes
+end
+
+-- LaTeX cannot read SVG, and Quarto converts only the images in the text, so
+-- convert the logo here, next to the SVG, and return the path of the PDF.
+local function logo_pdf(image)
+  local pdf = image:gsub("%.svg$", ".pdf")
+  local ok, converted = pcall(pandoc.pipe, "rsvg-convert",
+    { "-f", "pdf", pandoc.path.join({ input_dir, image }) }, "")
+  if not ok then fail("rsvg-convert cannot convert " .. image) end
+  local file = assert(io.open(pandoc.path.join({ input_dir, pdf }), "wb"))
+  file:write(converted)
+  file:close()
+  return pdf
+end
+
+local function title_logo(meta)
+  if meta.image == nil then return end
+  local image = pandoc.utils.stringify(meta.image)
+  if is_latex then
+    add_header(meta, pandoc.RawBlock("latex",
+      "\\newcommand{\\doclogo}[1]{\\includegraphics[height=#1]{"
+      .. logo_pdf(image) .. "}}"))
+  elseif quarto.doc.is_format("html") then
+    add_header(meta, pandoc.RawBlock("html",
+      "<style>#title-block-header h1.title::after "
+      .. "{ background-image: url(\"" .. image .. "\"); }</style>"))
+  end
+end
+
 function Pandoc(doc)
   is_latex = quarto.doc.is_format("latex")
   input_dir = pandoc.path.directory(quarto.doc.input_file)
   headings = collect_headings(doc.blocks)
   site_url = read_site_url()
+  title_logo(doc.meta)
   return doc:walk({
     Header = part,
     Div = environment,

@@ -7,6 +7,7 @@ description: >-
   look up, branch, share, tag, and undo changes, and to find the commit that
   changed a result.
 order: 1
+image: ../../logos/git.svg
 format:
   html: default
   pdf:

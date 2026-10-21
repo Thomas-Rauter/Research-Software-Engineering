@@ -6,6 +6,7 @@ description: >-
   and artifacts, and what follows from that, and how to log runs, compare
   them, and register and load models.
 order: 1
+image: ../../logos/mlflow.svg
 format:
   html: default
   pdf:

@@ -2,12 +2,19 @@
 title: Languages
 format: html
 number-sections: false
+listing:
+  contents: "*.qmd"
+  type: grid
+  grid-columns: 4
+  image-height: 3.5rem
+  sort: order
+  fields: [image, title]
 ---
 
 How to write research software in one programming language. Each language gets
 one document, which covers the language and its own tooling, such as its
 package manager and environments, its test framework, its linters, and its
-documentation tools. Planned are Python, R, SQL, and Bash.
+documentation tools. The languages are Python, R, SQL, and Bash.
 
 A language document mixes rules and reference. Its rules, such as that every
 user-facing function in Python has a docstring, carry the meaning of the

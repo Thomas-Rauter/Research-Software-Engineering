@@ -77,3 +77,41 @@ h1.part .part-number {
 .glance a {
   text-decoration: none;
 }
+
+// The logo of a language or a tool, which every page of one names in its
+// `image`: inline after a link, as ![](../logos/git.svg){.logo}, beside the
+// title, and on its card in the listing of the languages. The logo beside
+// the title is the background of ::after; filters/refs.lua sets its
+// `background-image` for the page, because a relative URL in a rule of this
+// file would be resolved against the stylesheet, not the page.
+img.logo {
+  height: 1.35em;
+  width: auto;
+  margin-left: 0.15em;
+  padding: 0.1em;
+  vertical-align: -0.35em;
+  border-radius: 0.25em;
+  background-color: $logo-bg;
+}
+#title-block-header h1.title::after {
+  content: "";
+  display: inline-block;
+  width: 1.3em;
+  height: 1.1em;
+  margin-left: 0.5em;
+  padding: 0.1em;
+  vertical-align: -0.15em;
+  border-radius: 0.25em;
+  background: no-repeat center / contain;
+  background-origin: content-box;
+  background-color: $logo-bg;
+}
+.quarto-grid-item p.card-img-top {
+  margin: 0;
+  padding: 1rem;
+  background-color: $logo-bg;
+  // More specific than the rule of Quarto, which crops the image to fill it.
+  > img.card-img {
+    object-fit: contain;
+  }
+}

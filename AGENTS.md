@@ -100,6 +100,10 @@ consistency, and tightening the prose.
   and publish the site; `build/README.md` explains how. `README.md` is the
   README of the repository, not a page of the site.
 - `favicon.svg` is the icon of the website.
+- `logos/` holds the logos of the languages and the tools, one SVG each,
+  named like the document it belongs to, such as `logos/python.svg` for
+  `languages/python.qmd`; `logos/README.md` says where each comes from
+  (see also "Structure of the languages and the tools").
 
 ## Front matter of a document
 
@@ -123,7 +127,9 @@ and in the metadata of the page, but not on the page itself, which starts
 with its own introduction. `order` sorts the documents of a part in the
 sidebar and in the overview page. `output-file` names the PDF after the
 title, with underscores. A document that other documents cite under a
-shorter name gives it as `short-title`, as *Design Principles* does.
+shorter name gives it as `short-title`, as *Design Principles* does. A
+document of a language or a tool gives its logo as `image`, a path relative
+to the document, such as `../logos/python.svg`.
 
 ## Structure of the design principles
 
@@ -272,9 +278,9 @@ The first documents are `tools/containers/index.qmd` and
 `tools/containers/apptainer.qmd`; follow them.
 
 - One document per language in `languages/`, such as
-  `languages/python.qmd`. When the first one is added, give
-  `languages/index.qmd` the same `listing` as `principles/index.qmd`; an
-  empty listing fails the build with a warning, which is why it has none yet.
+  `languages/python.qmd`. `languages/index.qmd` lists them as cards, each
+  with the logo and the title of its document and no description, like the
+  `listing` of `principles/index.qmd` otherwise.
 - In `tools/`, one folder per job, such as `tools/containers/`, with a
   document for the job, `index.qmd`, and one for each tool, such as
   `apptainer.qmd`. The job document compares the tools of the job and states
@@ -283,7 +289,9 @@ The first documents are `tools/containers/index.qmd` and
   named after the job and the tool, such as `Containers.pdf` and
   `Apptainer.pdf`. `tools/index.qmd` lists the
   jobs and their tools in a table, in alphabetical order of the jobs and
-  linked where a document exists; add the links when you add a document. The
+  linked where a document exists, each tool followed by its logo, as in
+  `[Apptainer](containers/apptainer.qmd) ![](../logos/apptainer.svg){.logo}`;
+  add the link and the logo when you add a document. The
   sidebar, set by hand in `_quarto.yml`, lists the jobs under the same names
   and in the same order, including those without a document, and the
   documents of a folder by `order`. A job without a document has no folder
@@ -312,6 +320,16 @@ The first documents are `tools/containers/index.qmd` and
   know, such as an Apptainer definition file, name it `default`: without a
   language, a block gets no copy button. Keep lines of code within about 80
   columns, or they run past the margin of the PDF.
+- Logos. Every document of a language or a tool has one, and a document of a
+  job, which is not one tool, has none. The logo is an SVG in `logos/` with
+  the name of the document, such as `docker.svg`: the symbol of the language
+  or the tool without its name where there is one, in its colors, about
+  square, and without embedded raster images. A language without a logo,
+  such as SQL, gets a generic symbol. The document names it in `image` and
+  `filters/refs.lua` shows it beside the title, in the website and in the
+  PDF; the listing of the languages and the table of `tools/index.qmd` show
+  it as well. Record where a new logo comes from, and under what license, in
+  `logos/README.md`.
 - Tools change faster than principles and languages, so each tool document
   states the versions of the tools it was last checked against, and each
   language document the version of the language.
@@ -465,7 +483,8 @@ Headings carry their identifier and classes: `# Scope {#sec-scope}`,
 - A new document needs no entry anywhere else: the sidebar and the overview
   page of its part list it by its front matter. The one exception is the
   first document of a job in `tools/` (see "Structure of the languages and
-  the tools").
+  the tools"). A document of a language or a tool adds its logo to `logos/`,
+  and one of a tool a link and the logo to `tools/index.qmd`.
 
 ## Collaboration
 

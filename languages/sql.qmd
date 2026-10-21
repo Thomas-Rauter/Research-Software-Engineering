@@ -1,0 +1,393 @@
+---
+title: SQL
+description: >-
+  What a research software engineer needs from SQL: what it is used for and
+  where it is weak, how a query is evaluated, what NULL and a join do to a
+  result, the syntax of the common queries, the tools for running and checking
+  them, and the rules that apply the principles to SQL.
+order: 3
+image: ../logos/sql.svg
+format:
+  html: default
+  pdf:
+    output-file: SQL
+---
+
+# What SQL is {#sec-overview .unnumbered}
+
+SQL is the language of relational databases. Data live in tables, which have
+named, typed columns and a row for each record, and tables refer to each other
+through keys. A query describes the result that is wanted, which columns from
+which tables under which conditions, and the database engine decides how to
+compute it. That is why SQL is concise, and why the same query can run on a
+table of a thousand rows or of a billion.
+
+In research software, SQL does the work that should happen next to the data:
+selecting, joining, and aggregating tables that are too large to load or that
+live in a database, such as clinical records, sensor archives, public
+databases, and the sample sheets of a lab, before Python or R continues with
+the result. Embedded engines also serve as a file format: SQLite holds the
+results or the metadata of a program in one file, and DuckDB queries CSV and
+Parquet files ([](../tools/data/parquet.qmd)) directly, without a server. SQL
+is weak where the computation is numerical, such as statistics or iterative
+algorithms, and a query that has grown to a few hundred lines is hard to read,
+test, and change; split it into steps (@sec-cte), or move the computation to
+library code in [](python.qmd) or [](r.qmd).
+
+Working in SQL comes down to a mental model (@sec-model), a small set of syntax
+(@sec-syntax), and a few tools (@sec-tooling). The rules at the end (@sec-rules)
+apply the principles to SQL.
+
+Examples checked against SQLite 3.45 and DuckDB 1.5. The syntax shown is
+standard SQL unless a comment says otherwise.
+
+
+# At a glance {#sec-at-a-glance .unnumbered}
+
+Every rule of this document in one line. The number and the title link to the
+rule.
+
+::: {.glance}
+| No. | Rule | In one line |
+|-----|------------------------------|----------------------------------------------------|
+| [-@sec-columns] | [](#sec-columns) | Name the columns in every query and every insert that code depends on. |
+| [-@sec-null-policy] | [](#sec-null-policy) | Decide what a NULL means for every filter, comparison, and aggregate, and say so. |
+| [-@sec-parameters] | [](#sec-parameters) | A query must not be built by inserting values into its text; pass them as parameters. |
+| [-@sec-join-check] | [](#sec-join-check) | Check the number of rows after a join, and join on columns that are unique on one side. |
+:::
+
+
+# How SQL thinks {#sec-model}
+
+Four facts explain most of the surprises of SQL in research software: a query
+is evaluated in a fixed order that is not the order it is written in
+(@sec-order), a NULL is not a value (@sec-null), the database enforces what
+the schema declares, but not always by default (@sec-schema), and engines speak
+dialects (@sec-dialects).
+
+
+## A query describes a result, not the steps {#sec-order}
+
+A query is written as `SELECT ... FROM ... WHERE ...` but evaluated in
+another order, and that order explains what a clause can see:
+
+| Step | Clause | Does |
+|------|--------------------|---------------------------------------------|
+| 1 | `FROM`, `JOIN` | Builds the rows from the tables and their joins |
+| 2 | `WHERE` | Keeps the rows for which the condition is true |
+| 3 | `GROUP BY` | Forms groups of rows |
+| 4 | `HAVING` | Keeps the groups for which the condition is true |
+| 5 | `SELECT` | Computes the columns, including aggregates and window functions |
+| 6 | `ORDER BY`, `LIMIT` | Sorts the result and keeps its first rows |
+
+So `WHERE` filters rows before they are grouped, and `HAVING` filters groups
+after; and in standard SQL a column named by an alias in `SELECT` is not yet
+known in `WHERE`. A table is a set of rows, with no order: without `ORDER BY`,
+the engine may return the rows in any order, and different engines, or the same
+one after an update, do. Never rely on the order of a result that was not
+sorted.
+
+
+## NULL is not a value {#sec-null}
+
+`NULL` stands for a missing or unknown value, and any comparison with it is
+neither true nor false but unknown, which is also `NULL`:
+
+```sql
+SELECT NULL = NULL, 5 > NULL, NULL IS NULL;   -- NULL, NULL, true
+```
+
+`WHERE` keeps only the rows for which the condition is true, so a row with a
+`NULL` is dropped by `temp_c = 6.0` and also by `temp_c <> 6.0`. Test with
+`IS NULL` and `IS NOT NULL`. Aggregates skip NULLs: `AVG(temp_c)` is the mean
+of the non-NULL values only, `COUNT(temp_c)` counts them, and `COUNT(*)`
+counts all rows. A result that silently skips values is the case that
+[](../principles/design.qmd#sec-missing) forbids unless the policy is
+documented (@sec-null-policy).
+
+
+## The schema is enforced by the database {#sec-schema}
+
+A `CREATE TABLE` declares the types of the columns and the constraints that the
+rows must satisfy: `NOT NULL`, `UNIQUE`, `PRIMARY KEY`, `CHECK` for a
+condition, and `REFERENCES` for a foreign key into another table. The engine
+rejects a row that violates one, so invalid data fail where they enter, which
+is [](../principles/design.qmd#sec-validation) done by the database. Declare
+what is true of the data, such as that latitudes lie between -90 and 90, and
+the database checks it on every insert, for every program that writes.
+
+SQLite is the exception to know: its column types are hints that it does not
+enforce, unless the table is declared `STRICT`, and it ignores foreign keys
+unless every connection starts with `PRAGMA foreign_keys = ON;`.
+
+
+## Engines speak dialects {#sec-dialects}
+
+The three engines that research software meets most differ in where they run
+and what they are for:
+
+| Engine | Runs as | For |
+|-----------|-------------------------------|------------------------------------|
+| SQLite | A library, with the data in one file; built into Python | Results and metadata of one program, small shared files |
+| DuckDB | A library, in memory or in one file | Analytical queries on large tables and on CSV and Parquet files |
+| PostgreSQL | A server, with many users at once | Shared databases, a group's or an institute's data |
+
+Basic queries are the same everywhere; types, dates, and functions are not, and
+neither is the arithmetic: `SELECT 1 / 2` is `0` in SQLite and PostgreSQL,
+which divide integers as integers, but `0.5` in DuckDB. Test a query on the
+engine that will run it, and write `1.0 * a / b` or a `CAST` where it matters
+([](../principles/design.qmd#sec-numeric-defaults)).
+
+
+# Essential syntax {#sec-syntax}
+
+The following examples use two tables, the stations and their measurements.
+
+
+## Tables and rows {#sec-tables}
+
+```sql
+CREATE TABLE station (
+    station_id INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL UNIQUE,
+    latitude   DOUBLE NOT NULL CHECK (latitude BETWEEN -90 AND 90),
+    longitude  DOUBLE NOT NULL CHECK (longitude BETWEEN -180 AND 180)
+);
+
+CREATE TABLE measurement (
+    station_id  INTEGER NOT NULL REFERENCES station (station_id),
+    measured_on DATE NOT NULL,
+    temp_c      DOUBLE,           -- NULL when the sensor failed
+    PRIMARY KEY (station_id, measured_on)
+);
+
+INSERT INTO station (station_id, name, latitude, longitude) VALUES
+    (1, 'Alpha', 52.5, 13.4),
+    (2, 'Beta', 48.1, 11.6),
+    (3, 'Gamma', 40.0, 3.7);
+
+INSERT INTO measurement (station_id, measured_on, temp_c) VALUES
+    (1, '2026-03-01', 4.5),
+    (1, '2026-03-02', NULL),
+    (1, '2026-03-03', 6.0),
+    (2, '2026-03-01', 7.2),
+    (2, '2026-03-02', 8.1);
+
+UPDATE measurement SET temp_c = NULL WHERE temp_c < -90;   -- sensor error code
+DELETE FROM measurement WHERE measured_on < '2026-01-01';
+```
+
+`UPDATE` and `DELETE` without a `WHERE` change every row. Run them first as a
+`SELECT` with the same `WHERE`, and look at the rows. SQLite spells the type
+`REAL` as well as `DOUBLE`.
+
+
+## Select, filter, sort {#sec-select}
+
+```sql
+SELECT name, latitude
+FROM station
+WHERE latitude > 50 AND name LIKE 'A%'    -- LIKE: % matches any text
+ORDER BY name DESC
+LIMIT 10;
+
+SELECT DISTINCT station_id FROM measurement;    -- without duplicates
+```
+
+
+## Group and aggregate {#sec-group}
+
+```sql
+SELECT station_id,
+       COUNT(*)      AS n,          -- all rows
+       COUNT(temp_c) AS n_valid,    -- rows with a value
+       AVG(temp_c)   AS mean_c      -- the mean of those
+FROM measurement
+GROUP BY station_id
+HAVING COUNT(temp_c) >= 2           -- a condition on the groups
+ORDER BY mean_c DESC;
+```
+
+Every column of `SELECT` is either in `GROUP BY` or inside an aggregate, such as
+`COUNT`, `SUM`, `AVG`, `MIN`, and `MAX`.
+
+
+## Join tables {#sec-join}
+
+```sql
+SELECT s.name, m.measured_on, m.temp_c
+FROM measurement AS m
+JOIN station AS s ON s.station_id = m.station_id   -- only matching rows
+WHERE m.temp_c IS NOT NULL;
+
+SELECT s.name, COUNT(m.temp_c) AS n_valid
+FROM station AS s
+LEFT JOIN measurement AS m ON m.station_id = s.station_id
+GROUP BY s.name;     -- keeps every station; Gamma has 0
+```
+
+`JOIN` keeps the pairs of rows whose keys match and drops the rest, and
+`LEFT JOIN` keeps every row of the left table, with NULLs where nothing matched.
+A join matches each row with *every* row that fits, so when the key is not
+unique on either side, the result has more rows than the tables, and a sum
+over a column of a repeated row counts it several times (@sec-join-check).
+
+
+## Break a query into steps {#sec-cte}
+
+A common table expression, `WITH name AS (...)`, names a step. Chain several to
+read a long query from top to bottom, and test each step on its own:
+
+```sql
+WITH valid AS (
+    SELECT station_id, temp_c
+    FROM measurement
+    WHERE temp_c IS NOT NULL
+)
+SELECT station_id, AVG(temp_c) AS mean_c
+FROM valid
+GROUP BY station_id;
+```
+
+
+## Window functions and CASE {#sec-window}
+
+A window function computes over a group of rows without collapsing them, which
+adds a column such as a group's mean, a rank, or the previous value:
+
+```sql
+SELECT station_id, measured_on, temp_c,
+       temp_c - AVG(temp_c) OVER (PARTITION BY station_id) AS anomaly,
+       LAG(temp_c) OVER (PARTITION BY station_id
+                         ORDER BY measured_on) AS prev_c   -- previous row
+FROM measurement;
+
+SELECT measured_on,
+       CASE WHEN temp_c IS NULL THEN 'missing'
+            WHEN temp_c < 5 THEN 'cold'
+            ELSE 'mild' END AS label
+FROM measurement;
+```
+
+
+## Query from Python and R {#sec-from-code}
+
+The code that sends a query passes the values as parameters, marked by `?`, and
+the driver sends them separately from the text of the query:
+
+```python
+import sqlite3   # or: import duckdb
+
+con = sqlite3.connect("research.db")
+con.execute("PRAGMA foreign_keys = ON")      # SQLite: for every connection
+rows = con.execute(
+    "SELECT * FROM station WHERE latitude > ?", (50,)
+).fetchall()
+```
+
+```r
+library(DBI)
+
+con <- dbConnect(RSQLite::SQLite(), "research.db")
+dbGetQuery(con, "SELECT * FROM station WHERE latitude > ?", params = list(50))
+dbDisconnect(con)
+```
+
+Python reads a result into a data frame with `pandas.read_sql_query` or, in
+DuckDB, `.df()`, R with `dbGetQuery()` or `dplyr` on a `tbl(con, "station")`.
+
+
+## DuckDB on files {#sec-duckdb}
+
+DuckDB reads CSV and Parquet files as if they were tables, and writes a result
+to a file:
+
+```sql
+SELECT station_id, AVG(temp_c) AS mean_c
+FROM 'measurements.parquet'              -- or read_csv('measurements.csv')
+GROUP BY station_id;
+
+COPY (SELECT * FROM measurement WHERE temp_c IS NOT NULL)
+TO 'valid.parquet' (FORMAT parquet);
+```
+
+
+# Tooling {#sec-tooling}
+
+| Job | Tool |
+|-------------------------------|---------------------------------------------|
+| Run SQL by hand | the shells `sqlite3`, `duckdb`, and `psql` |
+| Run SQL from code | Python: `sqlite3` (built in), `duckdb`, SQLAlchemy; R: DBI with RSQLite, duckdb, or RPostgres |
+| Lint and format | SQLFluff |
+| Changes of a schema | A migration tool, such as Alembic (Python) or Flyway |
+
+```bash
+sqlite3 research.db < schema.sql              # run a script on a database file
+sqlite3 research.db "SELECT COUNT(*) FROM measurement;"
+duckdb research.duckdb -c "SELECT COUNT(*) FROM measurement;"
+sqlfluff lint queries/ --dialect duckdb       # check; "fix" repairs the layout
+```
+
+Keep the schema and the queries that code depends on as `.sql` files in the
+repository of the code, and build the database from them: the schema is the
+recipe of the database ([](../principles/design.qmd#sec-recipe)). Test a query
+on a small database, in memory, whose rows are chosen so that the right result
+is known ([](../principles/testing.qmd#sec-known-answers)), and include the
+rows with NULLs and the keys that match nothing
+([](../principles/testing.qmd#sec-edges)).
+
+
+# Rules {#sec-rules}
+
+
+## Name the columns {#sec-columns}
+
+A query or an insert that code depends on should name its columns.
+`SELECT *` returns whatever the table has today, so a column added, removed, or
+reordered by the next change of the schema changes what the caller receives,
+often without an error; and `INSERT INTO t VALUES (...)` without a column list
+writes by position. The columns of a table are an API
+([](../principles/design.qmd#sec-stable-api)): name what you use, and a change
+of the schema either leaves the query alone or fails loudly. `SELECT *` is fine
+for looking at a table by hand.
+
+
+## Decide what NULL means {#sec-null-policy}
+
+Every query on a column that may hold NULL should have a stated policy
+([](../principles/design.qmd#sec-missing)): whether the rows with NULL are
+dropped, counted, or an error. State it where the query is, in a comment or in
+the name of the query, and show it in the result, for example by selecting
+`COUNT(*)` next to `COUNT(temp_c)`. Test NULL with `IS NULL` and never with
+`= NULL`, and write comparisons with `<>` knowing that the rows with a NULL
+will not be in the result. Declare `NOT NULL` for every column that must have a
+value, so that a missing one fails on entry.
+
+
+## Never build a query from strings {#sec-parameters}
+
+A query must not be built by inserting values into its text, with string
+concatenation or an f-string; pass them as parameters, as in @sec-from-code.
+A value inserted into the text is parsed as SQL, so a name such as `O'Brien`
+breaks the query, and a value from outside can run commands of its own, the
+SQL injection. A parameter is always a value, and the driver quotes it. Names
+of tables and columns cannot be parameters; build those from a fixed list of
+allowed names, never from input.
+
+
+## Check the rows after a join {#sec-join-check}
+
+A join on a key that is not unique on either side multiplies rows, and an
+aggregate over the result is then a plausible, wrong number. Join on a column
+that is unique on one side, usually a primary key, and assert that the joined
+result has as many rows as the left table, as a `LEFT JOIN` on a unique key
+does ([](../principles/design.qmd#sec-assertions)):
+
+```sql
+SELECT (SELECT COUNT(*) FROM measurement) AS before,
+       (SELECT COUNT(*)
+        FROM measurement m LEFT JOIN station s ON s.station_id = m.station_id
+       ) AS after;       -- 5 and 5; more after means a duplicated key
+```
+
+In code, run the check after the join and stop if the counts differ.

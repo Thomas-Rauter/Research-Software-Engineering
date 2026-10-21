@@ -6,6 +6,11 @@ project:
   # Only Quarto documents are pages; README.md and AGENTS.md are not.
   render:
     - "*.qmd"
+  # The logos of languages and tools. Every page names its own in `image`,
+  # and filters/refs.lua shows it beside the title with a rule of CSS, which
+  # Quarto does not follow.
+  resources:
+    - logos/*.svg
 
 website:
   title: Research Software Engineering

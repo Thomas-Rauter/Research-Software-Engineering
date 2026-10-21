@@ -41,7 +41,8 @@ the disk space, run `docker image rm rse-site`.
 
 1. Put the source in the folder of its part, for example
    `languages/python.qmd`, with a `title`, a `description`, an `order`, and the
-   name of its PDF (see AGENTS.md).
+   name of its PDF, and for a language or a tool the `image` of its logo (see
+   AGENTS.md).
 2. Run `make site`, or `make preview` while writing.
 3. Commit the source. The sidebar and the overview page of the part list the
    new document by themselves, except the first document of a job in

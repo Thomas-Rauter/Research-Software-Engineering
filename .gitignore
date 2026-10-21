@@ -12,4 +12,7 @@
 /*/*.tex
 !/style/*.tex
 
+# The PDFs of the logos, which filters/refs.lua makes from the SVGs.
+/logos/*.pdf
+
 **/*.quarto_ipynb

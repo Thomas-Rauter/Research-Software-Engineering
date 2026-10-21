@@ -1,0 +1,409 @@
+---
+title: R
+description: >-
+  What a research software engineer needs from R: what it is used for and where
+  it is weak, how vectors, copying, and missing values work, the syntax that
+  most code is made of, the tools for environments, packages, and tests, and
+  the rules that apply the principles to R.
+order: 2
+image: ../logos/r.svg
+format:
+  html: default
+  pdf:
+    output-file: R
+---
+
+# What R is {#sec-overview .unnumbered}
+
+R is a language for statistics and data analysis, with dynamic types, in which
+the vector is the basic value and the data frame the central structure. Models
+are written as formulas, such as `y ~ x`, and the base installation already
+brings the statistical methods, the tables, and the plots that a data analysis
+needs. Beyond it there are more than twenty thousand packages: CRAN, a curated
+archive whose packages must pass automatic checks on every release, and
+Bioconductor, the packages for genomics and other high-throughput biology.
+
+R is the language of statisticians and of whole fields, such as bioinformatics,
+ecology, and epidemiology, for analyses, publication graphics (ggplot2),
+reports (Quarto, R Markdown), small web applications (Shiny), and packages that
+carry a new statistical method to its users. It is weaker as a general-purpose
+language: the base language has grown inconsistencies, and services, command
+line tools, and long-running programs are mostly written in other languages.
+Much of the work goes to compiled code, and R code that loops over single
+elements is slow like Python code that does, so write whole-vector expressions
+(@sec-vectors).
+
+Working in R comes down to a mental model (@sec-model), a small set of syntax
+(@sec-syntax), and a few tools (@sec-tooling). The rules at the end (@sec-rules)
+apply the principles to R. The comparison with [](python.qmd) is noted where the
+two differ, because many readers know both.
+
+Checked against R 4.3, renv 1.2, testthat 3.2, and roxygen2 7.3.
+
+
+# At a glance {#sec-at-a-glance .unnumbered}
+
+Every rule of this document in one line. The number and the title link to the
+rule.
+
+::: {.glance}
+| No. | Rule | In one line |
+|-----|------------------------------|----------------------------------------------------|
+| [-@sec-seq] | [](#sec-seq) | Loop with `seq_len()` and `seq_along()`, not with `1:n`. |
+| [-@sec-na-rm] | [](#sec-na-rm) | Decide what happens to `NA` explicitly, and never set `na.rm = TRUE` by reflex. |
+| [-@sec-renv] | [](#sec-renv) | Lock the packages of an analysis or a workflow with renv, and commit `renv.lock`. |
+| [-@sec-roxygen] | [](#sec-roxygen) | Every exported function should have a roxygen documentation that states units, shapes, and defaults. |
+:::
+
+
+# How R thinks {#sec-model}
+
+Four facts explain most of the surprises of R in research software: everything
+is a vector (@sec-vectors), values are copied and not shared (@sec-copy),
+missing values are values (@sec-na), and a package is either attached or
+called by name (@sec-attach).
+
+
+## Everything is a vector {#sec-vectors}
+
+R has no scalars: `5` is a vector of length one, and operations work on whole
+vectors, which makes a loop over single elements unnecessary. Indexing starts
+at 1, a range includes both ends, and a negative index drops elements:
+
+```r
+values <- c(2.5, 3.1, 4.0)   # a vector: the basic value
+values[1]                    # 2.5, the first element
+values[-1]                   # 3.1 4.0, all but the first
+values[values > 3]           # 3.1 4.0, by a condition
+values * 2 + 1               # 6.0 7.2 9.0, element by element
+```
+
+Three behaviors give a plausible, wrong result instead of an error. An index
+beyond the end gives `NA`, not an error: `values[10]` is `NA`. A shorter vector
+is recycled to the length of a longer one, with a warning only when the longer
+length is not a multiple of the shorter: `1:6 + 1:2` silently gives
+`2 4 4 6 6 8`. And `1:n` counts down when `n` is 0, as `1:0` is `c(1, 0)`
+(@sec-seq).
+
+
+## Values are copied, not shared {#sec-copy}
+
+R copies a value when it is changed, and shares it until then. After
+`b <- a`, a change to `b` leaves `a` as it was, and a function that changes its
+argument changes only its own copy:
+
+```r
+a <- c(1, 2, 3)
+b <- a
+b[1] <- 0
+a                  # 1 2 3, unchanged
+
+f <- function(v) { v[1] <- 99; v }
+f(a)               # 99 2 3
+a                  # 1 2 3, unchanged
+```
+
+That makes R safe against the defect of
+[](../principles/design.qmd#sec-mutation) by default, the opposite of
+[](python.qmd). The exceptions are the objects that are changed in place:
+environments, R6 and reference classes, and the `:=` operator of data.table.
+Treat their functions as mutating, and document it.
+
+
+## NA is a value {#sec-na}
+
+`NA` is the missing value in vectors of every type, and it is infectious: an
+operation on an `NA` gives `NA`, so `sum(c(1, NA))` is `NA`, and so is
+`NA == NA`. Test with `is.na()`. `NaN` (not a number) and `NULL` (no object,
+not a missing value) are different things.
+
+Most summary functions give `NA` for a vector with an `NA` unless called with
+`na.rm = TRUE`, which drops them. The first is loud, the second silent, so
+dropping must be a decision (@sec-na-rm). A second trap is indexing with a
+condition that has `NA`:
+
+```r
+df <- data.frame(station = c("A", "A", "B"), temp_c = c(20.1, 22.3, NA))
+df[df$temp_c > 21, ]            # a row of NA for station B, not just row 2
+df[which(df$temp_c > 21), ]     # row 2 only: which() drops the NA
+subset(df, temp_c > 21)         # row 2 only; dplyr::filter() does too
+```
+
+
+## Attached packages mask each other {#sec-attach}
+
+`library(pkg)` attaches a package: its functions can then be called by their
+plain names, and a function of a package attached later hides one of the same
+name from an earlier package, as `dplyr::filter` hides `stats::filter`. R only
+prints a message when it happens. `pkg::fun()` calls a function by its package
+and is unambiguous. Use `library()` at the top of a script, and `::` in a
+package, where the `NAMESPACE` file declares what is imported.
+
+
+# Essential syntax {#sec-syntax}
+
+The following is the part of R that most research code is made of.
+
+
+## Values and collections {#sec-values}
+
+```r
+n <- 3L                       # an integer; 3 is a double
+rate <- 0.05                  # a double; assign with <-
+name <- "station-7"
+ok <- TRUE                    # write TRUE and FALSE, never T and F
+
+ages <- c(ana = 31, bo = 28)  # a named vector
+ages["ana"]                   # 31
+station <- list(name = "A", lat = 52.5, tags = c("coast", "tide"))
+station$name                  # "A"
+station[["lat"]]              # 52.5, one element; [ ] gives a sub-list
+
+paste("Station", name, "has", length(values), "values")
+sprintf("%s: %.2f", name, rate)   # "station-7: 0.05"
+```
+
+A data frame is a list of equally long columns:
+
+```r
+df$temp_k <- df$temp_c + 273.15     # a new column
+df[df$station == "A", "temp_c"]     # rows by condition, one column
+nrow(df); ncol(df); names(df); str(df)
+```
+
+
+## Conditionals and loops {#sec-control}
+
+```r
+if (rate > 0.1) {
+  print("high")
+} else if (rate > 0) {
+  print("low")
+} else {
+  print("zero")
+}
+
+for (i in seq_along(values)) {        # with the index
+  cat(i, values[i], "\n")
+}
+for (v in values) print(v)            # over the items
+while (n > 0) n <- n - 1              # break and next work as usual
+
+ifelse(values > 3, "warm", "cold")    # if, for a whole vector
+vapply(values, function(v) v^2, numeric(1))      # apply, with the type
+lapply(split(df$temp_c, df$station), mean, na.rm = TRUE)   # per group
+```
+
+The condition of an `if` must be a single `TRUE` or `FALSE`; a longer vector is
+an error since R 4.2, and an `NA` is an error as well. Prefer `vapply()` to
+`sapply()`: `sapply()` guesses the type of its result, and returns an empty
+`list()` for empty input where `vapply()` returns an empty vector of the stated
+type.
+
+
+## Functions {#sec-functions}
+
+```r
+#' Mean drift rate of a station
+#'
+#' @param distance_m Distance moved, in meters.
+#' @param days Time span, in days; must be positive.
+#' @param per_year If `TRUE`, return meters per year instead of per day.
+#' @return The rate, in meters per day or per year.
+#' @export
+drift_rate <- function(distance_m, days, per_year = FALSE) {
+  if (days <= 0) {
+    stop("`days` must be positive, got ", days, call. = FALSE)
+  }
+  rate <- distance_m / days
+  if (per_year) rate * 365.25 else rate
+}
+
+drift_rate(12, 30)                          # by position
+drift_rate(12, days = 30, per_year = TRUE)  # by name
+```
+
+The value of the last expression is the return value; `return()` is for an
+early exit. Arguments are evaluated when first used, not when the function is
+called. The tidyverse packages use this to let a call refer to a column by its
+bare name, as in `filter(df, temp_c > 21)`, while the base functions need
+`df$temp_c`.
+
+
+## Errors {#sec-errors}
+
+```r
+result <- tryCatch(
+  drift_rate(12, 0),
+  error = function(e) {
+    message("skipped: ", conditionMessage(e))
+    NA_real_
+  }
+)
+```
+
+`stop()` raises an error for what the caller must fix, and `warning()` warns of
+what the result can survive ([](../principles/design.qmd#sec-output)). Catch
+only what you can handle.
+
+
+## Files and paths {#sec-files}
+
+```r
+path <- file.path("data", "stations.csv")   # joins with the right separator
+df <- read.csv(path)                        # or readr::read_csv()
+write.csv(df, path, row.names = FALSE)
+saveRDS(df, "df.rds")                       # any R object, exactly
+df <- readRDS("df.rds")
+list.files("data", pattern = "\\.csv$", full.names = TRUE)
+```
+
+
+## Tables and models {#sec-tables}
+
+The tidyverse, above all dplyr, expresses table operations as a pipeline of
+verbs, connected by the native pipe `|>` (R 4.1 and later):
+
+```r
+library(dplyr)
+
+df |>
+  filter(!is.na(temp_c), temp_c > 15) |>        # rows
+  mutate(temp_k = temp_c + 273.15) |>           # new columns
+  group_by(station) |>
+  summarise(mean_c = mean(temp_c), n = n())     # one row per group
+
+left_join(df, stations, by = "station")         # join two tables
+```
+
+A model is a function of a formula, with the response left of `~` and the
+predictors right of it, and of the data:
+
+```r
+fit <- lm(temp_c ~ depth_m, data = measurements)
+coef(fit)             # the estimates
+summary(fit)          # estimates, standard errors, tests, R squared
+predict(fit, newdata = data.frame(depth_m = 25))
+```
+
+Defaults are part of the API
+([](../principles/design.qmd#sec-numeric-defaults)): `sd()` divides by `n - 1`,
+the sample standard deviation, where `numpy.std()` divides by `n`.
+
+
+# Tooling {#sec-tooling}
+
+| Job | Tool |
+|-------------------------------|---------------------------------------------|
+| R version | rig, or the module or container image of the cluster |
+| Packages, lock file | renv; Bioconductor packages through `BiocManager` |
+| Package skeleton and development | usethis, devtools |
+| Tests | testthat |
+| Reference documentation | roxygen2, built into a website with pkgdown |
+| Lint and format | lintr, styler |
+| Reports | Quarto, R Markdown |
+
+
+## The packages of a project with renv {#sec-renv-usage}
+
+renv gives a project its own library of packages and records their exact
+versions in `renv.lock`:
+
+```r
+renv::init()           # a project library and renv.lock, for this directory
+renv::install("dplyr") # install a package into the project library
+renv::snapshot()       # record the installed versions in renv.lock
+renv::restore()        # install exactly what renv.lock says
+renv::status()         # does the library match the lock file?
+```
+
+Commit `renv.lock`, and not the library `renv/library/`. renv records the
+version of R as well but does not install it, so a rebuilt environment needs
+the same R, for example from a container image
+([](../tools/containers/index.qmd)).
+
+
+## A package with devtools {#sec-package}
+
+Code that is used more than once belongs in a package
+([](../principles/design.qmd#sec-library)), not in a script that is `source()`d:
+
+```r
+usethis::create_package("stationfit")   # DESCRIPTION, NAMESPACE, R/
+usethis::use_testthat()                 # tests/testthat/
+usethis::use_r("drift")                 # a new file R/drift.R
+devtools::load_all()                    # load the code without installing
+devtools::document()                    # roxygen comments to man/ and NAMESPACE
+devtools::test()                        # run the tests
+devtools::check()                       # R CMD check: code, docs, and tests
+```
+
+`R CMD check`, which `devtools::check()` runs, tests that the package installs,
+that its documentation is complete and matches the code, and that its examples
+and tests pass. It is the standard that CRAN applies, so run it on every
+change.
+
+
+## Test with testthat {#sec-testthat}
+
+Tests are files `tests/testthat/test-*.R` with calls of `test_that()`:
+
+```r
+test_that("drift_rate gives meters per day", {
+  expect_equal(drift_rate(12, 30), 0.4)       # with a tolerance of 1.5e-8
+  expect_error(drift_rate(12, 0), "positive") # and the message matches
+})
+```
+
+`expect_equal()` compares with a tolerance and `expect_identical()` exactly
+([](../principles/testing.qmd#sec-float-tests)); use the first for numbers
+that were computed.
+
+
+# Rules {#sec-rules}
+
+
+## Use seq_len() and seq_along(), not 1:n {#sec-seq}
+
+A loop over the indices of a vector should use `seq_along(x)`, and one over a
+count `seq_len(n)`. `1:n` is not empty when `n` is zero but `c(1, 0)`, so the
+loop body runs twice, with `i` equal to 1 and 0, on elements that do not exist,
+and indexing an empty vector gives `NA` and nothing instead of an error
+([](../principles/design.qmd#sec-loud)). An empty vector is a common case, for
+example after a filter that kept no row, and `seq_len(0)` and `seq_along(x)`
+are empty then, as the loop needs.
+
+
+## Decide what happens to NA {#sec-na-rm}
+
+Code must not drop missing values without saying so. `na.rm = TRUE` turns a
+loud `NA` into a silent smaller sample, and the result looks as valid as
+before. Set it only where dropping is the intended policy, make it a parameter
+of your own function when the caller may want the other choice, and state the
+policy in the documentation and the count of dropped values in the output
+([](../principles/design.qmd#sec-missing)). Where an `NA` is a defect, check
+for it with `anyNA()` and stop.
+
+
+## Lock the packages with renv {#sec-renv}
+
+An analysis or a workflow should run with a project library whose versions are
+locked by renv, and commit `renv.lock` with the code
+([](../principles/design.qmd#sec-pin)). A package declares in `DESCRIPTION`
+the packages it imports, with the lowest version that works, and leaves the
+exact versions to the project that uses it. As renv does not lock R itself,
+record the version of R with the results as well, or run in a container image
+([](../principles/design.qmd#sec-traceability)).
+
+
+## Document every exported function with roxygen {#sec-roxygen}
+
+An exported function should have roxygen comments, written next to the
+function, that state what it computes and, for every parameter and the return
+value, its meaning, shape, unit, and default
+([](../principles/documenting.qmd#sec-reference)). `devtools::document()`
+turns them into the help pages, which `R CMD check` compares with the code, so
+a parameter that is documented but missing, or the other way round, is
+reported, and pkgdown builds the website from them. Mark with `@export` only
+what users are meant to call; everything else is internal and free to change
+([](../principles/design.qmd#sec-stable-api)).

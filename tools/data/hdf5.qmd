@@ -5,6 +5,7 @@ description: >-
   arrays in chunks inside a single file and what follows from that, and how to
   write, read, and inspect HDF5 files from Python, R, and the command line.
 order: 2
+image: ../../logos/hdf5.svg
 format:
   html: default
   pdf:

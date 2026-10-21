@@ -5,6 +5,7 @@ description: >-
   definition files, building and pulling images, running programs in them
   isolated from the host, and running them in jobs on a cluster.
 order: 1
+image: ../../logos/apptainer.svg
 format:
   html: default
   pdf:
