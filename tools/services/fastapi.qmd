@@ -1,0 +1,225 @@
+---
+title: FastAPI
+description: >-
+  What a research software engineer needs to know about FastAPI: that the types
+  of a function become the contract of a web service and what follows from
+  that, and how to write, run, call, and test a service that serves a model.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: FastAPI
+---
+
+# About this document {#sec-about .unnumbered}
+
+FastAPI turns a Python function into a web service. The function gets an
+address, such as `POST /predict`, and FastAPI reads the types of its arguments
+and of its return value as the contract of the service: it checks every
+request against them, turns the JSON of the request into Python objects and the
+result back into JSON, and documents the service from them. Almost everything
+that FastAPI does, and what it lets through, follows from that (@sec-model).
+Working with it comes down to writing the functions and their types, then
+running, calling, and testing the service (@sec-usage).
+
+A service brings a model or a computation to users who call it over the
+network, from any language, at the price of running it for as long as it
+exists ([](../../principles/design.qmd#sec-web)). The science belongs in a
+library that the service calls, not in the service itself. A service usually
+runs in a container ([](../containers/docker.qmd#sec-service)).
+
+Checked against FastAPI 0.153, Pydantic 2.14, and Uvicorn 0.54.
+
+
+# How FastAPI thinks {#sec-model}
+
+A request passes through three layers. A server, Uvicorn, receives it from the
+network and hands it to the application, which FastAPI builds from the
+functions; FastAPI finds the function for the method and the path of the
+request, checks and converts the data on the way in and on the way out, and
+the server sends the answer back:
+
+```default
+client    POST /predict   {"pressure_kpa": 101.3, "n_atoms": 12}
+server    Uvicorn receives the request and passes it to the app
+app       FastAPI finds the function for POST /predict
+          checks the JSON against Sample           422 if it does not fit
+          calls predict(sample)                    500 if it raises
+          turns the Prediction into JSON
+client    200   {"melting_point_k": 412.7, "model_version": "1.2.0"}
+```
+
+The status code says how a request went: 200 for success, 422 for a request
+that does not fit the contract, with a message that names the field, and 500
+for an exception in the function.
+
+
+## The types are the contract {#sec-contract}
+
+The types of a function are written as models of Pydantic: classes that list
+the fields of the request and of the response, with their types, their
+constraints, such as `Field(gt=0)`, and their descriptions. FastAPI rejects
+every request that does not fit before the function runs, so the function
+never sees a negative pressure or a missing field
+([](../../principles/design.qmd#sec-validation)). It also documents the
+service from them, at `/docs`, in a page where every field shows its type, its
+constraints, and its description, and where requests can be tried out. Put the
+units into the descriptions, or into the names of the fields, such as
+`pressure_kpa` ([](../../principles/design.qmd#sec-conventions)).
+
+
+## What the contract lets through {#sec-lax}
+
+By default, the contract is lenient in three ways, and each can turn into a
+plausible wrong number:
+
+- **Unknown fields are ignored.** A request with a misspelled field, such as
+  `temperatur`, passes, and the function computes with the default of
+  `temperature` instead ([](../../principles/design.qmd#sec-no-guess)).
+  `model_config = ConfigDict(extra="forbid")` in a model rejects such a
+  request.
+- **Values are converted.** The string `"101.3"` is accepted as a float and
+  `12.0` as an integer. `ConfigDict(strict=True)` accepts only values of the
+  right type.
+- **JSON has no NaN.** FastAPI turns NaN and infinity in a response into
+  `null`, the same as a missing value, so a client cannot tell them apart. Give
+  missing values a documented meaning, and do not return infinities
+  ([](../../principles/design.qmd#sec-missing)).
+
+
+## One server, many requests {#sec-concurrency}
+
+The server runs many requests at once. A function defined with `def` runs in a
+pool of threads, so a slow one does not hold up the others. A function defined
+with `async def` runs in the loop that serves all requests, and must never
+compute or wait without `await`: a prediction in it stops every other request
+until it ends. Define functions that compute with `def`.
+
+A service loads its model once, when it starts, in the function `lifespan`
+(@sec-app), not in every request, which would make each slow. `--workers 4`
+starts four processes, and each loads its own copy of the model and keeps its
+own memory: a cache or a counter in a variable exists four times, and what one
+process writes the others never see. A computation that takes minutes does not
+fit into a request, which clients and proxies cut off after some time; such a
+service returns an ID for the job at once and the result when it is asked
+again.
+
+
+## Every answer carries its version {#sec-version}
+
+A service changes under its users, so a result has to record the version that
+produced it ([](../../principles/design.qmd#sec-web)). Return the version of
+the code and of the model in every response, as `model_version` does in
+@sec-app, and give the service its version in `FastAPI(version=...)`, which
+`/docs` shows. A change that breaks clients gets a new path, such as
+`/v2/predict`, while the old one keeps working for a while
+([](../../principles/design.qmd#sec-stable-api)).
+
+
+# Working with FastAPI {#sec-usage}
+
+The example serves a model that predicts melting points, saved with joblib; a
+model registered in MLflow loads by its version instead
+([](../tracking/mlflow.qmd#sec-models)).
+
+
+## Write a service {#sec-app}
+
+```python
+from contextlib import asynccontextmanager
+
+import joblib
+from fastapi import FastAPI
+from pydantic import BaseModel, ConfigDict, Field
+
+model = {}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    model["regressor"] = joblib.load("model.joblib")    # once, at startup
+    yield
+
+
+app = FastAPI(title="Melting points", version="1.2.0", lifespan=lifespan)
+
+
+class Sample(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    pressure_kpa: float = Field(gt=0, description="Pressure, in kPa")
+    n_atoms: int = Field(gt=0, description="Atoms per molecule")
+
+
+class Prediction(BaseModel):
+    melting_point_k: float = Field(description="Melting point, in K")
+    model_version: str
+
+
+@app.post("/predict")
+def predict(sample: Sample) -> Prediction:
+    x = [[sample.pressure_kpa, sample.n_atoms]]
+    value = float(model["regressor"].predict(x)[0])
+    return Prediction(melting_point_k=value, model_version=app.version)
+```
+
+`lifespan` runs the code before `yield` when the service starts and the code
+after it when it stops. `Sample` is the contract of the request and
+`Prediction` that of the response: FastAPI checks the request against the type
+of the argument, and the response against the return type, which also keeps
+any field out of the response that `Prediction` does not list. `@app.get`
+serves requests that only read, such as `GET /health`; their arguments are of
+simple types and come from the address, as in `GET /stations?country=NO`.
+
+
+## Run it {#sec-run}
+
+```bash
+fastapi dev main.py                # at 127.0.0.1:8000, reloads on change
+fastapi run main.py --workers 4    # for production
+```
+
+`fastapi dev` serves on the machine itself and restarts the service whenever
+the code changes, for development. `fastapi run` serves on every network
+address of the machine, `0.0.0.0`, as a container needs; on a server outside a
+container, a web server in front of it, such as nginx, handles encryption and
+logins. Both start Uvicorn and serve the documentation at `/docs`. In a
+Dockerfile, `CMD ["fastapi", "run", "main.py"]` starts the service.
+
+
+## Call it {#sec-call}
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict \
+    -H "Content-Type: application/json" \
+    -d '{"pressure_kpa": 101.3, "n_atoms": 12}'
+```
+
+Any language calls the service with an HTTP library, such as httpx or requests
+in Python and httr2 in R, and the page `/docs` tries out requests in the
+browser. `/openapi.json` describes the whole service in the OpenAPI format,
+from which tools generate clients in other languages.
+
+
+## Test it {#sec-test}
+
+```python
+from fastapi.testclient import TestClient
+
+from main import app
+
+
+def test_rejects_an_unknown_field():
+    with TestClient(app) as client:          # runs the lifespan
+        response = client.post(
+            "/predict",
+            json={"pressure_kpa": 101.3, "n_atoms": 12, "temperatur": 300},
+        )
+    assert response.status_code == 422
+```
+
+`TestClient` sends requests to the application in the same process, without a
+server or a network, so tests of a service run with pytest like any other.
+Use it in a `with` block: without one, `lifespan` does not run, and the model
+is never loaded. Test the contract, such as that unknown fields and negative
+pressures are rejected, and test the science in the library that the service
+calls, not through the service.

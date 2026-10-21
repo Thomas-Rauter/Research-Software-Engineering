@@ -13,14 +13,14 @@ of its own. A job or a tool without a link has no document yet.
 
 | Job | Tools |
 |-----|-------|
+| Cloud computing | [AWS](cloud/aws.qmd) |
 | [Containers](containers/index.qmd) | [Apptainer](containers/apptainer.qmd), [Docker](containers/docker.qmd) |
+| Data formats and storage | [Parquet](data/parquet.qmd), [HDF5](data/hdf5.qmd), [Zarr](data/zarr.qmd) |
+| Experiment tracking | [MLflow](tracking/mlflow.qmd) |
+| HPC scheduling | [Slurm](scheduling/slurm.qmd) |
+| Services | [FastAPI](services/fastapi.qmd) |
+| Version control and CI | Git, GitHub Actions |
 | Workflow managers | Nextflow, Snakemake |
-| HPC scheduling | Slurm |
-| Cloud computing | AWS |
-| Data formats and storage | Parquet, HDF5, Zarr |
-| Experiment tracking | MLflow |
-| Services | FastAPI |
-| Version control and continuous integration | Git, GitHub Actions |
 
 Like a language document, a tool document mixes rules, which carry the
 [normative language](../principles/design.qmd#sec-normative) of *Design

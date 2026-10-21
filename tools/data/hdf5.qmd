@@ -1,0 +1,211 @@
+---
+title: HDF5
+description: >-
+  What a research software engineer needs to know about HDF5: how it stores
+  arrays in chunks inside a single file and what follows from that, and how to
+  write, read, and inspect HDF5 files from Python, R, and the command line.
+order: 2
+format:
+  html: default
+  pdf:
+    output-file: HDF5
+---
+
+# What HDF5 is {#sec-overview .unnumbered}
+
+HDF5 is a file format for arrays that works like a file system in a file. It
+has three concepts (@fig-structure). A group is like a directory: it holds
+datasets and other groups, and a path names each, such as
+`/run_01/temperature`. A dataset is HDF5's name for an array: values of one
+type with any number of dimensions, up to 32, such as a vector of 720
+latitudes or floats of shape 365 × 720 × 1440 for a year of daily maps of
+temperature. The number of dimensions is fixed when the dataset is created. A
+dataset is like a file of this file system, but not a file on the disk: all
+groups and datasets lie inside the one HDF5 file. Parquet uses the word for a
+directory of files instead ([](parquet.qmd#sec-datasets)). An attribute is a
+small named value on a group or a dataset, such as the units of a dataset or
+the parameters of a run, so that the arrays and what they mean travel
+together, in one file that can be copied, archived, and published as it is.
+
+![An HDF5 file, `ocean.h5`, with the results of two runs of an ocean model. The group `/` holds everything in the file: two datasets of coordinates, `lat` and `lon`, and a group for each run, which holds the datasets of the run, shown for `/run_01` only. Each dataset is an array of one type and shape, and each attribute is tied to the group or the dataset it describes.](figures/structure.svg){#fig-structure}
+
+Inside the file, HDF5 usually cuts a dataset into chunks, blocks of its
+values, and keeps an index of where each lies. Almost everything that makes
+HDF5 fast or fragile follows from the chunks and from the one file, which one
+program at a time writes (@sec-storage). Working with it comes down to writing
+and reading slices of datasets, and to looking inside files (@sec-usage).
+
+Many formats of the sciences are HDF5 inside, such as NetCDF-4 in the earth
+sciences (@sec-netcdf), AnnData (`.h5ad`) in single-cell biology, NeXus at
+neutron and X-ray sources, and the MAT-files of MATLAB since version 7.3, so
+the tools of this document open them too. In Python, h5py reads and writes
+HDF5, in R, the packages rhdf5 of Bioconductor and hdf5r, and HDF5 itself
+brings command-line tools, such as `h5ls` and `h5dump`. Tables belong in
+[](parquet.qmd) instead, and arrays that many processes write at once, or that
+live in the cloud, in [](zarr.qmd).
+
+Checked against HDF5 2.0 with h5py 3.16, the command-line tools of HDF5 1.14,
+rhdf5 2.56, and xarray 2026.9.
+
+
+# How HDF5 stores arrays {#sec-storage}
+
+A chunk is a piece of one dataset: a block of its values. The shape of the
+chunks is chosen when the dataset is created: chunks of 1 × 720 × 1440 cut
+`temperature` into 365 chunks, the map of one day each. HDF5 stores every
+chunk, and compresses it, on its own, somewhere in the file, and an index
+inside the file records where each chunk lies. Chunks have no names, paths, or
+attributes, and a program never handles them: it reads or writes a slice, such
+as the map of one day, and HDF5 finds the chunks that hold it. A dataset may
+also be stored contiguously, as one block, but compression and datasets that
+grow need chunks.
+
+
+## Read only the chunks you need {#sec-chunks}
+
+Reading a slice of a dataset reads, and decompresses, every chunk that the
+slice touches, and only these. The shape of the chunks so decides which slices
+are fast: with a chunk per day, the map of one day is one chunk, but the time
+series of one point touches all 365 chunks, nearly the whole dataset. Choose
+the shape of the chunks after the slices that are read most often, with a size
+of about 100 KB to a few MB: small chunks make the index large, and large
+chunks read more than is needed. The shape cannot change afterwards;
+`h5repack` copies a file with other chunks (@sec-inspect).
+
+
+## The order of the axes {#sec-axis-order}
+
+HDF5 stores arrays in row-major order, as C and NumPy do, and lists the axes
+from the slowest to the fastest. Languages that store arrays in column-major
+order, such as R, Julia, Fortran, and MATLAB, show the same dataset with its
+axes reversed: a dataset of shape 365 × 720 × 1440, written with h5py, has the
+dimensions 1440 × 720 × 365 in R. The values are the same, but every index is
+reversed, and an attribute that names the axes, such as `time`, `lat`, `lon`,
+names them in the order of the writer, not of the reader. A square matrix, such
+as a matrix of distances, arrives transposed without an error
+([](../../principles/design.qmd#sec-conventions)). Check the order of the axes
+in every language that reads a file, or select them by name (@sec-netcdf).
+
+
+## Attributes and fill values {#sec-attributes}
+
+HDF5 stores attributes but prescribes none: it has no standard for units, for
+the names of the axes, or for missing values. Store them anyway, as attributes
+([](../../principles/design.qmd#sec-conventions)), or write NetCDF-4, which
+fixes all three (@sec-netcdf). HDF5 has no missing values of its own: an array
+of floats uses NaN, and an array of integers a value that stands for missing,
+which an attribute names ([](../../principles/design.qmd#sec-missing)).
+
+Every dataset has a fill value, 0 by default, and the parts of a dataset that
+were never written read as the fill value, without an error. A dataset that is
+created at its full size and filled day by day reads as zeros wherever the
+writing stopped or skipped a day ([](../../principles/design.qmd#sec-loud)).
+Give datasets of floats the fill value NaN, so that what was never written
+reads as missing.
+
+
+## One file, one writer {#sec-one-writer}
+
+One program at a time writes an HDF5 file. While a program has a file open for
+writing, HDF5 locks it, and any other program that opens it fails, even only to
+read it. Many processes that write results, such as the jobs of a Slurm array,
+write a file each, to be merged afterwards, or write [Zarr](zarr.qmd).
+Parallel HDF5 lets processes of one MPI program write one file together.
+
+HDF5 keeps parts of the index in memory and writes them when the file is
+closed. A program that is killed while it writes, such as a job that exceeds
+its time limit, can leave a file that does not open at all, with every dataset
+in it, including those written long before. Close files with `with` in Python,
+and write to a temporary file that is renamed only after it was closed
+([](../../principles/design.qmd#sec-all-or-nothing)).
+
+Unlike a Parquet file, a dataset can grow, along the axes that were declared
+resizable when it was created, such as time. A deleted dataset leaves its space
+behind: the file does not shrink, and `h5repack` copies it without the gaps.
+
+
+# Working with HDF5 {#sec-usage}
+
+The libraries read and write slices of datasets as arrays of the language, and
+the command-line tools show what a file holds without a program.
+
+
+## Write and read with h5py {#sec-h5py}
+
+```python
+import h5py
+import numpy as np
+
+with h5py.File("ocean.h5", "w") as f:
+    temperature = f.create_dataset(
+        "temperature", shape=(365, 720, 1440), dtype="float32",
+        chunks=(1, 720, 1440), compression="gzip", fillvalue=np.nan,
+    )
+    temperature.attrs["units"] = "degC"
+    temperature.attrs["axes"] = ["time", "lat", "lon"]
+    temperature[0] = first_day             # writes one chunk
+
+with h5py.File("ocean.h5", "r") as f:
+    first_day = f["temperature"][0]        # reads one chunk
+    everything = f["temperature"][()]      # reads the whole dataset
+```
+
+`f["temperature"]` is not an array but a handle to the dataset, valid while the
+file is open: indexing it reads or writes only the chunks of the slice, as a
+NumPy array, and `[()]` reads the whole dataset. Mode `"w"` replaces an
+existing file, `"a"` opens one to change it. `f.create_group("run_01")` makes a
+group, and paths such as `f["run_01/temperature"]` reach into it.
+`maxshape=(None, 720, 1440)` makes the first axis resizable, and `resize` grows
+it. Compress with `gzip`, which every HDF5 library reads; other compressions,
+such as `lzf` or zstd, need a plugin in every program that reads the file.
+
+
+## Read in R {#sec-r}
+
+```r
+library(rhdf5)
+
+h5ls("ocean.h5")
+first_day <- h5read("ocean.h5", "temperature", index = list(NULL, NULL, 1))
+h5readAttributes("ocean.h5", "temperature")
+```
+
+The axes are reversed (@sec-axis-order): time is the last axis in R, so the
+first day is `index = list(NULL, NULL, 1)`, although the attribute `axes` still
+reads `time`, `lat`, `lon`. hdf5r, on CRAN, reverses the axes in the same way.
+
+
+## Named axes with NetCDF-4 and xarray {#sec-netcdf}
+
+```python
+import xarray as xr
+
+ocean = xr.open_dataset("ocean.nc")    # reads values only when used
+first_june = ocean["temperature"].sel(time="2024-06-01")
+first_june.to_netcdf("first_june.nc")
+```
+
+NetCDF-4 is HDF5 with conventions: every axis has a name and may have
+coordinates, such as the dates of the time axis, and the attributes follow the
+CF conventions, such as `units` and `_FillValue`. Readers in every language
+understand them, and xarray in Python selects by the name of an axis and by
+coordinate, such as a date, instead of by position, which removes the trap of
+@sec-axis-order. For arrays on a grid, NetCDF-4 through xarray is usually a
+better choice than plain HDF5. A NetCDF-4 file is still an HDF5 file, and h5py
+and the command-line tools open it.
+
+
+## Look inside a file {#sec-inspect}
+
+```bash
+h5ls -r ocean.h5                            # its groups and datasets
+h5dump -H ocean.h5                          # with types and attributes
+h5dump -H -p -d temperature ocean.h5        # with chunks and compression
+h5repack ocean.h5 packed.h5                 # a copy without unused space
+h5repack -l temperature:CHUNK=365x10x10 ocean.h5 series.h5   # other chunks
+```
+
+The command-line tools come with HDF5, in packages such as `hdf5-tools` of
+Debian and Ubuntu, and HDFView shows a file in a window. `h5dump` without `-H`
+prints the values as well, which for a large dataset is more than anyone wants
+to read.

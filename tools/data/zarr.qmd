@@ -1,0 +1,196 @@
+---
+title: Zarr
+description: >-
+  What a research software engineer needs to know about Zarr: how it stores
+  arrays as one file or object per chunk and what follows from that, and how to
+  write, read, and inspect Zarr arrays with zarr-python and xarray.
+order: 3
+format:
+  html: default
+  pdf:
+    output-file: Zarr
+---
+
+# What Zarr is {#sec-overview .unnumbered}
+
+Zarr is a format for arrays with the model of HDF5
+([](hdf5.qmd#sec-overview)): groups, arrays, which HDF5 calls datasets, and
+attributes, with every array cut into chunks. It differs in where the data
+lie. HDF5 is a file system in a file, with the chunks as blocks inside it and
+an index of where each lies; Zarr uses the file system itself (@fig-store). A
+group is stored as a directory, which holds arrays and other groups. An array
+is stored as a directory as well: a file `zarr.json` in it describes the
+array, and every chunk, a block of its values such as the map of one day, is a
+file of its own. As in HDF5, an array holds values of one type with any
+number of dimensions.
+An attribute is a small named value on a group or an array, kept in its
+`zarr.json`. In a cloud store, such as Amazon S3, the directories are prefixes
+of names, such as `s3://bucket/ocean.zarr/`, and the files are objects.
+
+![The results of the ocean model of the figure in *HDF5*, as a Zarr store, `ocean.zarr`. Every group and every array is a directory, with a file `zarr.json` that describes it and holds its attributes. Every chunk of an array, here the map of one day, is a file of its own. The arrays of the runs are shown for `run_01/` only.](figures/store.svg){#fig-store}
+
+Zarr takes over from HDF5 where the one file is in the way. Because every chunk
+is a file of its own, many processes can write one array at once, and a reader
+can fetch single chunks over a network, from a cloud store; almost everything
+that sets Zarr apart follows from that (@sec-storage). Where the one file is an
+advantage, to send, archive, or publish data, HDF5 stays the simpler choice.
+Working with Zarr comes down to writing and reading slices of arrays, mostly
+through xarray (@sec-usage).
+
+Zarr is at home in climate and earth observation data, and in microscopy, as
+OME-Zarr. In Python, zarr-python reads and writes it, and xarray, with Dask,
+works on it with named axes; in R, Rarr of Bioconductor reads and writes it,
+and libraries in other languages, such as Julia, C++, and Java, too. Tables
+belong in [](parquet.qmd) instead.
+
+Checked against zarr-python 3.4, xarray 2026.9, Dask 2026.8, and Rarr 2.0.
+
+
+# How Zarr stores arrays {#sec-storage}
+
+The `zarr.json` of an array describes it completely: its shape, its type, the
+shape of its chunks, its compression, its fill value, the names of its axes,
+and its attributes. A chunk is named by its position in the grid of chunks,
+such as `c/0/0/0` for the first day of `temperature` and `c/364/0/0` for the
+last. Unlike HDF5, Zarr so needs no index of where the chunks lie: a reader
+reads the `zarr.json` first, works out the names of the chunks that hold a
+slice, and the file system or the cloud store finds them by name.
+
+
+## Read only the chunks you need, over a network too {#sec-chunks}
+
+As in HDF5, a slice reads and decompresses only the chunks it touches, and the
+shape of the chunks decides which slices are fast
+([](hdf5.qmd#sec-chunks)). Because every chunk is a file or an object of its
+own, a reader fetches them one by one and in parallel, from a disk, a web
+server, or a cloud store: the map of one day, from an array of terabytes in the
+cloud, downloads one chunk. Every request over a network takes time, so chunks
+of Zarr are best larger than those of HDF5, of about 1 to 100 MB.
+
+
+## Many writers, no locks {#sec-writers}
+
+Processes that write different chunks write different files, so many processes
+may write one array at once, without locks, such as the jobs of a Slurm array,
+each writing its days. Two processes that write into the same chunk, however,
+overwrite each other: each reads the chunk, changes its part, and writes the
+chunk back, and the part of the first is lost without an error. Neither Zarr
+nor xarray prevents it. Let every process write whole chunks, by cutting the
+work along the borders of the chunks.
+
+
+## Missing chunks read as the fill value {#sec-fill}
+
+Zarr does not write a chunk that holds only the fill value, and it reads a
+chunk that does not exist as the fill value. A missing chunk is therefore
+normal, not an error: a job that failed, a chunk lost in a copy, or a region
+that nobody wrote reads as the fill value, 0 by default, without an error
+([](../../principles/design.qmd#sec-loud)). The metadata are written when the
+array is created, so the array has its full shape from the start. Give arrays
+of floats the fill value NaN, as xarray does, so that what was never written
+reads as missing ([](../../principles/design.qmd#sec-missing)).
+`nchunks_initialized` counts the chunks that exist, which tells a complete
+array from an incomplete one, as long as no chunk holds only the fill value.
+
+
+## Many small files {#sec-files}
+
+One file per chunk adds up: an array of a terabyte in chunks of a megabyte is a
+million files. The file systems of clusters limit the number of files per user
+and are slow with many small ones, and copying or deleting such a directory
+takes long. Use larger chunks, or shards: Zarr 3 stores many chunks in one
+file, a shard, and still reads them one by one. To move or archive an array,
+zip its directory, without compression, because the chunks are compressed
+already; zarr-python reads the zip file as it is (@sec-inspect).
+
+
+## Two versions of the format {#sec-versions}
+
+Zarr has two versions of its format, 2 and 3, with different files: version 2
+describes an array in `.zarray` and `.zattrs`, and version 3 in `zarr.json`.
+zarr-python 3 and xarray write version 3 by default, but some readers, in
+other languages or older versions, read only version 2. Write version 2, with
+`zarr_format=2`, for a reader that needs it. Shards and the names of the axes
+in the metadata exist only in version 3, and not every reader of version 3
+reads shards, such as Rarr in R (@sec-r).
+
+
+# Working with Zarr {#sec-usage}
+
+zarr-python reads and writes arrays as NumPy arrays, by position. xarray adds
+names and coordinates, and Dask reads and computes in parallel, chunk by chunk.
+
+
+## Write and read with zarr-python {#sec-zarr-python}
+
+```python
+import numpy as np
+import zarr
+
+ocean = zarr.open_group("ocean.zarr", mode="w")
+temperature = ocean.create_array(
+    "temperature", shape=(365, 720, 1440), chunks=(1, 720, 1440),
+    dtype="float32", fill_value=np.nan,
+    dimension_names=["time", "lat", "lon"],
+)
+temperature.attrs["units"] = "degC"
+temperature[0] = first_day                  # writes one chunk
+
+temperature = zarr.open_array("ocean.zarr/temperature", mode="r")
+first_day = temperature[0]                  # reads one chunk
+```
+
+Indexing an array reads or writes only the chunks of the slice, as in h5py
+([](hdf5.qmd#sec-h5py)). Mode `"w"` replaces whatever is at the path, `"a"`
+opens it to change it. `shards=(30, 720, 1440)` in `create_array` stores thirty
+chunks to a file (@sec-files). A URL in place of the path, such as
+`s3://bucket/ocean.zarr`, reads from a cloud store, with the package s3fs
+installed.
+
+
+## Named axes with xarray and Dask {#sec-xarray}
+
+```python
+import xarray as xr
+
+ocean = xr.open_zarr("ocean.zarr")          # lazy, in the chunks of the store
+mean_june = ocean["temperature"].sel(time="2024-06").mean("time")
+mean_june.to_zarr("mean_june.zarr")         # computes and writes
+```
+
+`open_zarr` reads only the metadata and the coordinates: every other array
+becomes an array of Dask, in the chunks of the store, and a computation reads
+the chunks it needs, in parallel, when its result is written or `compute` is
+called. xarray stores the names of the axes and the coordinates, such as the
+dates, in the store, and selects by them ([](hdf5.qmd#sec-netcdf)). `to_zarr`
+with `append_dim="time"` appends along the time axis, and with `region` writes
+one part of an existing array, such as the days of one job (@sec-writers).
+
+
+## Read in R {#sec-r}
+
+```r
+library(Rarr)
+
+zarr_overview("ocean.zarr/temperature")
+first_day <- read_zarr_array("ocean.zarr/temperature",
+                             index = list(1, NULL, NULL))
+```
+
+Rarr, of Bioconductor, reads and writes Zarr arrays of both versions, but not
+shards. Unlike rhdf5 for HDF5 ([](hdf5.qmd#sec-axis-order)), it keeps the axes
+in the order of the store, the same as in Python, so the first day is
+`index = list(1, NULL, NULL)`.
+
+
+## Look inside {#sec-inspect}
+
+```python
+print(zarr.open_group("ocean.zarr").tree())           # groups and arrays
+print(zarr.open_array("ocean.zarr/temperature").info) # chunks, compression
+```
+
+The metadata are JSON files, which any editor or `cat` shows, such as
+`ocean.zarr/temperature/zarr.json`. A zip file of a store, made inside its
+directory with `zip -0 -r ../ocean.zarr.zip .`, opens read-only, with
+`zarr.open_group(zarr.storage.ZipStore("ocean.zarr.zip"), mode="r")`.

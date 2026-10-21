@@ -1,0 +1,278 @@
+---
+title: Slurm
+description: >-
+  What a research software engineer needs to know about Slurm: that a job is a
+  request for resources and what follows from that, and how to write job
+  scripts, submit and follow jobs, run many of them, and find out what they
+  used.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: Slurm
+---
+
+# About this document {#sec-about .unnumbered}
+
+On a cluster, you do not run a program; you ask for resources, and Slurm runs
+your program when it can grant them. A job is a request: so many CPUs, so much
+memory, and possibly GPUs, for so long. It waits in a queue until the resources
+are free, and then its script runs inside them, and only inside them. Almost
+everything that surprises newcomers follows from that: jobs that wait for
+hours, jobs killed at their limits, and programs that run slower on the cluster
+than on a laptop (@sec-model). Working with Slurm comes down to writing a job
+script, submitting it, and finding out afterwards what the job used
+(@sec-usage).
+
+Every cluster configures Slurm its own way, with its own partitions, limits,
+accounts, and file systems, which its documentation describes. This document
+covers what holds on all of them. [](../containers/apptainer.qmd#sec-slurm)
+shows how to run a container in a job, and workflow managers, such as Snakemake
+and Nextflow, submit the jobs of their steps themselves.
+
+Checked against Slurm 24.11.
+
+
+# How Slurm thinks {#sec-model}
+
+A cluster is many computers, the nodes, and one or a few login nodes in front
+of them. Everyone logs in to the same login nodes, to edit, compile, move
+files, and submit jobs; a computation there slows them down for everyone, and
+many clusters kill it. The compute nodes are reached only through Slurm. They
+are grouped into partitions, such as nodes with GPUs or nodes for long jobs,
+each with its own limits.
+
+A job asks for resources on a partition and is charged to an account, usually
+that of the project. Slurm queues it, and when it can grant the resources on
+some nodes, it runs the script of the job there, inside the allocation: the
+CPUs, the memory, and the GPUs granted, for the time granted.
+
+
+## A job gets what it asks for, and no more {#sec-request}
+
+The resources a job asks for are a hard limit. A job that runs past its time is
+ended, with the state `TIMEOUT`, and a job that uses more memory than it asked
+for is killed, with the state `OUT_OF_MEMORY`, often with no more than a line
+about an `oom_kill` in its output. Both lose whatever the job had not yet
+written. Asking for too much is no safer: a large request waits longer for
+resources to become free, uses up the share of the project, and keeps them
+from others. Measure what a job used (@sec-after), and ask for a little more
+than that.
+
+Slurm grants CPUs but does not make a program use them. A program uses as many
+threads as it is told, or as it decides itself, and many libraries, such as the
+linear algebra under NumPy and R, count every core of the node, not those
+granted. With too many threads, they compete for the granted CPUs and the
+program runs slower than with fewer; with too few, the CPUs idle. Pass the
+number granted, `$SLURM_CPUS_PER_TASK`, to the program and to its libraries,
+such as with `OMP_NUM_THREADS` (@sec-script).
+
+
+## Tasks, CPUs, and nodes {#sec-tasks}
+
+A task is a process. `--ntasks` asks for several processes that work together,
+as a program written with MPI does, and `srun` starts the program once per
+task. Most research programs are a single process with several threads, which
+is one task with several CPUs, `--cpus-per-task`. Asking for `--ntasks=8`
+instead gives eight CPUs that may lie on different nodes, which one process
+cannot use, and `srun` would start the program eight times.
+
+`--mem` is the memory per node, and `--mem-per-cpu` the memory per CPU. The
+script of a job with several nodes runs on the first of them; only `srun`
+reaches the others.
+
+
+## The queue: priority and backfill {#sec-queue}
+
+Slurm starts waiting jobs by their priority, which grows with the time a job
+has waited and shrinks with the resources that its account has used recently,
+its fair share. While a large job waits for enough nodes to become free,
+Slurm fills the gap with smaller jobs, as long as they end before the large job
+could start; this backfill is why a job with a short time limit often starts at
+once while a long one waits. Ask for an honest time, not the maximum of the
+partition. `squeue` shows why a job waits: `Priority` for jobs ahead of it,
+`Resources` for resources not yet free, `Dependency` for another job
+(@sec-dependencies).
+
+
+## A job takes the shell along {#sec-environment}
+
+A job runs in the directory it was submitted from, with the environment
+variables of the shell that submitted it: the modules loaded, a Python or conda
+environment activated, and any variable set by hand travel with the job,
+recorded nowhere. The same script, submitted from another shell, computes with
+other versions, an undeclared input
+([](../../principles/design.qmd#sec-declared-inputs)). Let the script set up
+its environment itself: unload all modules with `module purge`, load those it
+needs, and activate its environment (@sec-script).
+
+
+## Where the files live {#sec-files}
+
+A cluster has several file systems. The home directory is small and backed up,
+for code and configuration. A scratch or work file system is large and fast,
+for data and results, but not backed up, and many clusters delete files there
+that were not used for some weeks. A node-local directory, often `$TMPDIR`, is
+the fastest and is deleted when the job ends. The shared file systems are
+slow with many small files, as many processes read and write them at once;
+pack them, as a Zarr store with shards does
+([](../data/zarr.qmd#sec-files)), or copy them to the node-local directory at
+the start of the job.
+
+
+# Working with Slurm {#sec-usage}
+
+A job is a shell script whose first lines, starting with `#SBATCH`, hold the
+options of `sbatch`. The same options can be given on the command line of
+`sbatch`, where they override those of the script.
+
+
+## Write a job script {#sec-script}
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=fit-ocean
+#SBATCH --partition=cpu
+#SBATCH --account=ocean-lab
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
+#SBATCH --time=02:00:00
+#SBATCH --output=logs/%x-%j.out
+
+set -euo pipefail
+module purge
+module load python/3.12
+source .venv/bin/activate
+
+export OMP_NUM_THREADS="$SLURM_CPUS_PER_TASK"
+python fit.py --threads "$SLURM_CPUS_PER_TASK" --seed 42 --job "$SLURM_JOB_ID"
+```
+
+Slurm reads `#SBATCH` lines only up to the first command; one further down is
+an ordinary comment, and its option is silently lost. The names of the
+partitions, the accounts, and the modules differ from cluster to cluster. Pass
+the ID of the job to the program and record it with the results, so that
+`sacct` can later tell where and with what a result was computed
+([](../../principles/design.qmd#sec-traceability)). The options used most:
+
+| Option | Asks for |
+|----------------------------|--------------------------------------------------------|
+| `--partition`, `--account` | The partition to run on and the account to charge |
+| `--cpus-per-task=n` | `n` CPUs for one process (@sec-tasks) |
+| `--ntasks=n` | `n` processes, for MPI |
+| `--mem=16G`, `--mem-per-cpu=2G` | Memory per node or per CPU; a number without a unit is in megabytes |
+| `--time=D-HH:MM:SS` | The time limit; `--time=30` is 30 minutes, and `--time=30:00` as well |
+| `--gpus=1` | A GPU; some clusters ask for `--gres=gpu:1` instead |
+| `--output=logs/%x-%j.out` | The file for the output, with `%x` for the name of the job and `%j` for its ID |
+| `--array`, `--dependency` | Many jobs from one script (@sec-arrays), and jobs that wait for others (@sec-dependencies) |
+| `--signal=B:USR1@300` | A signal to the script 300 seconds before the time limit (@sec-checkpoint) |
+
+Without `--output`, the output goes into `slurm-<ID>.out` in the directory the
+job was submitted from. Recent versions of Slurm create a missing directory
+for the output; on older ones, create it before submitting, or the job fails
+without leaving any output.
+
+
+## Submit, follow, and cancel {#sec-submit}
+
+```bash
+sbatch fit.sh                  # prints: Submitted batch job 123456
+squeue --me                    # my jobs, and why they wait
+squeue --me --start            # when they are expected to start
+scontrol show job 123456       # everything about one job
+scancel 123456                 # cancel it
+```
+
+`sbatch` returns at once; the job runs later, on its own, and the terminal can
+be closed. A job that waits shows the reason in the last column of `squeue`
+(@sec-queue). `sinfo` lists the partitions and the state of their nodes.
+
+
+## Work interactively {#sec-interactive}
+
+```bash
+srun --cpus-per-task=4 --mem=8G --time=01:00:00 --pty bash
+```
+
+An interactive job opens a shell on a compute node, with the resources asked
+for, to try a program, debug it, or measure what it needs before writing the
+job script. It waits in the queue like any job, and it ends with the shell or
+at its time limit. Some clusters offer Jupyter or a desktop through a web
+portal, such as Open OnDemand, which starts such a job behind the scenes.
+
+
+## Many jobs from one script: arrays {#sec-arrays}
+
+```bash
+#!/bin/bash
+#SBATCH --array=1-100%10
+#SBATCH --cpus-per-task=2
+#SBATCH --time=00:30:00
+#SBATCH --output=logs/%x-%A_%a.out
+
+config=$(sed -n "${SLURM_ARRAY_TASK_ID}p" configs.txt)
+python fit.py --config "$config" --seed "$SLURM_ARRAY_TASK_ID"
+```
+
+An array submits one script as many tasks, each with its own number in
+`$SLURM_ARRAY_TASK_ID`, from which it chooses its input, its parameters, or its
+seed ([](../../principles/design.qmd#sec-reproducibility)). `%10` runs at most
+ten at once. In `--output`, `%A` is the ID of the array and `%a` the number of
+the task. One array is easier on the scheduler than a hundred jobs, and
+`scancel` with the ID of the array cancels all of its tasks. The cluster limits
+the size of an array, often to about a thousand tasks.
+
+
+## Jobs that wait for others: dependencies {#sec-dependencies}
+
+```bash
+fit=$(sbatch --parsable fit.sh)
+sbatch --dependency=afterok:"$fit" plot.sh
+```
+
+`afterok` starts the second job only once the first has succeeded, and
+`afterany` once it has ended in any way. If the first job fails, a job that
+waits with `afterok` stays in the queue for good, with the reason
+`DependencyNeverSatisfied`, until it is cancelled. For more than a few steps, a
+workflow manager keeps track of what depends on what, and of what is to be
+rerun.
+
+
+## Save a checkpoint before the time limit {#sec-checkpoint}
+
+```bash
+#!/bin/bash
+#SBATCH --time=24:00:00
+#SBATCH --signal=B:USR1@300
+
+trap 'touch stop-and-save' USR1
+python simulate.py --resume-from checkpoints/ &
+wait    # returns when the signal arrives
+wait    # waits until the program has saved and stopped
+```
+
+A long computation that saves its state from time to time, a checkpoint, can
+continue in a new job where the old one ended, instead of starting over.
+`--signal=B:USR1@300` sends the signal `USR1` to the script, `B`, about 300
+seconds before the time limit; the script catches it with `trap` and tells the
+program to save its state and stop, here with a file the program looks for. The
+program runs in the background, with `&`, because the shell handles a signal
+only after the command in the foreground has ended. The first `wait` returns
+as soon as the signal arrives, and the second waits for the program; without
+it, the script, and with it the job, would end before the program has saved.
+
+
+## Find out what a job used {#sec-after}
+
+```bash
+sacct -j 123456 --format=JobID,State,Elapsed,TotalCPU,MaxRSS,ReqMem,ExitCode
+seff 123456
+```
+
+`sacct` reports on jobs that have ended: their state, such as `COMPLETED`,
+`FAILED`, `TIMEOUT`, or `OUT_OF_MEMORY`, how long they ran, the CPU time and
+the most memory they used, `MaxRSS`, and their exit code. `seff`, which many
+clusters install, sums this up as the share of the CPUs and of the memory
+asked for that a job used. A CPU efficiency far below 100 percent means that
+the program did not use the CPUs it was granted (@sec-request), and a memory
+use far below the request means that the next job can ask for less.

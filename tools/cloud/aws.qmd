@@ -1,0 +1,188 @@
+---
+title: AWS
+description: >-
+  What a research software engineer needs to know about Amazon Web Services:
+  that everything is a rented resource, in a region, behind permissions, and
+  paid for as long as it exists, and how to log in, keep data in S3, and run
+  machines on EC2.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: AWS
+---
+
+# About this document {#sec-about .unnumbered}
+
+Amazon Web Services (AWS) rents out computers, storage, and hundreds of other
+services by the second or the gigabyte. Everything in it is a resource, such
+as a machine, a disk, or a bucket of files: it lives in one region of one
+account, only those whom a permission names may use it, and it costs money for
+as long as it exists, whether it is used or not. Almost every surprise on AWS,
+above all the bill, follows from that (@sec-model). Working with it, for most
+research software, comes down to logging in, keeping data in S3, and renting
+machines on EC2 (@sec-usage).
+
+Every action in the web console is a call to the same interface that the
+command-line tool `aws` and the libraries, such as boto3 in Python, call. What
+can be clicked can be scripted, and a script records what was done, which
+clicks do not ([](../../principles/design.qmd#sec-recipe)). This document uses
+the command-line tool. Beyond S3 and EC2, AWS Batch runs many jobs in
+containers from a queue, much like Slurm ([](../scheduling/slurm.qmd)), and
+ParallelCluster sets up a cluster with Slurm on AWS.
+
+Checked against the AWS CLI 2.38.
+
+
+# How AWS thinks {#sec-model}
+
+An account holds resources and receives their bill; organizations often give
+each project an account of its own. A region is a group of data centers, such
+as `eu-central-1` in Frankfurt, and almost every resource lives in exactly
+one. Permissions, in Identity and Access Management (IAM), say who may do what
+with which resource; whatever no permission allows is denied.
+
+
+## Everything costs for as long as it exists {#sec-costs}
+
+AWS bills resources while they exist, not while they are used. A machine bills
+while it runs, its disk as long as the disk exists, even when the machine is
+stopped, and data in S3 every month. The usual surprise on the bill is a
+forgotten resource: a machine with a GPU left running over a holiday, the
+disks of machines stopped long ago, or a bucket of intermediate files. Set a
+budget with an alert in the console, under Billing, before anything else; tag
+every resource with its project, such as `project=ocean`; and end what is no
+longer needed, in every region that was used, because the console shows most
+resources one region at a time.
+
+Moving data costs as well. Uploading data into AWS is free, and so is moving
+it between S3 and machines in the same region, but downloading it out of AWS,
+or between regions, is charged per gigabyte. Keep the computation in the region
+of the data, and bring back only results, not raw data.
+
+
+## Nothing is allowed unless granted {#sec-iam}
+
+Every call to AWS carries credentials, and IAM checks them against
+permissions. People log in through the single sign-on of their organization,
+IAM Identity Center, and get credentials that expire after some hours
+(@sec-login). Programs on a machine in AWS get theirs from a role attached to
+the machine, without any keys. Keys that never expire, an access key ID and a
+secret, are the last resort: never write them into code, a notebook, or a
+repository, where they are found and used within hours of a push. Grant a
+person or a program only what it needs, such as reading one bucket.
+
+A region is also a jurisdiction: data stay in the region they were put in,
+which matters for personal data, such as patient records under the GDPR.
+
+
+## S3: objects, not files {#sec-s3}
+
+S3 stores objects in buckets. An object is a key, such as
+`data/raw/s1.csv`, and its bytes, written whole and replaced whole: in an
+ordinary bucket, there is no appending to an object and no changing part of
+it. There are no
+directories, only keys that share a beginning, a prefix, which the tools show
+as directories. Renaming a "directory" copies and deletes every object under
+its prefix. Bucket names are global across all accounts, so a name such as
+`data` is long taken; name buckets after the organization and the project.
+
+Formats that read only the parts they need, by requests for ranges of bytes or
+for single objects, work well from S3, such as Parquet
+([](../data/parquet.qmd#sec-columns)) and Zarr, which writes one object per
+chunk ([](../data/zarr.qmd#sec-chunks)). Versioning, switched on per bucket,
+keeps the old versions of overwritten and deleted objects, a cheap protection
+against a script that writes to the wrong prefix.
+
+
+## EC2: machines by the second {#sec-ec2}
+
+An EC2 instance is a virtual machine. Its instance type fixes the CPUs, the
+memory, and the GPUs, such as `c7i.4xlarge` with 16 CPUs and 32 GB, and its
+image, an AMI, the operating system it starts from. Its disk is an EBS volume,
+which survives when the instance is stopped and, by default, is deleted when it
+is terminated. Some types also have fast local disks, which lose their data
+when the instance stops. Stopping an instance ends the bill for the machine but
+not for its disk; terminating it ends both, and deletes its disk.
+
+Spot instances run on capacity that AWS has spare, for a fraction of the
+price, but AWS can take them back at two minutes' notice. They suit work that
+saves checkpoints and can resume ([](../scheduling/slurm.qmd#sec-checkpoint)).
+New accounts may start only few CPUs, and often no GPUs at all; ask for higher
+quotas, under Service Quotas, days before they are needed.
+
+
+# Working with AWS {#sec-usage}
+
+The examples assume a profile `lab` and a bucket `lab-ocean-data` in
+`eu-central-1`. Every command takes `--region` and `--profile`, which
+otherwise come from the profile or the variables `AWS_REGION` and
+`AWS_PROFILE`.
+
+
+## Log in {#sec-login}
+
+```bash
+aws configure sso                 # once: the portal of the organization
+aws sso login --profile lab       # every day: credentials for some hours
+export AWS_PROFILE=lab
+aws sts get-caller-identity       # who am I, and in which account
+```
+
+`aws configure sso` asks for the address of the portal of the organization and
+saves a profile in `~/.aws/config`. The libraries that read from AWS, such as
+boto3, Polars, and s3fs, find the credentials of the profile themselves, so
+code does not handle them. `aws sts get-caller-identity` shows which account
+the commands that follow act on, before anything is created or deleted.
+
+
+## Keep data in S3 {#sec-s3-usage}
+
+```bash
+aws s3 mb s3://lab-ocean-data --region eu-central-1
+aws s3 cp results/fit.json s3://lab-ocean-data/results/fit.json
+aws s3 sync data/ s3://lab-ocean-data/data/
+aws s3 sync data/ s3://lab-ocean-data/data/ --delete --dryrun
+aws s3 ls s3://lab-ocean-data/data/ --recursive --human-readable --summarize
+aws s3 presign s3://lab-ocean-data/results/fit.json --expires-in 86400
+```
+
+`sync` copies only what is missing or has changed, in either direction, and
+with `--delete` also deletes what the source no longer has: check that with
+`--dryrun` first. `presign` prints an address by which anyone can download one
+object, here for a day, without an account. Code reads from S3 by address:
+
+```python
+import polars as pl
+import xarray as xr
+
+samples = pl.read_parquet("s3://lab-ocean-data/data/samples.parquet")
+ocean = xr.open_zarr("s3://lab-ocean-data/ocean.zarr")    # needs s3fs
+```
+
+
+## Run a machine on EC2 {#sec-ec2-usage}
+
+```bash
+aws ec2 run-instances --image-id ami-0123456789abcdef0 \
+    --instance-type c7i.4xlarge --key-name lab --tag-specifications \
+    'ResourceType=instance,Tags=[{Key=project,Value=ocean}]'
+aws ec2 describe-instances --filters Name=instance-state-name,Values=running \
+    --query 'Reservations[].Instances[].[InstanceId,InstanceType,LaunchTime]' \
+    --output table
+aws ec2 stop-instances --instance-ids i-0abc123def4567890
+aws ec2 terminate-instances --instance-ids i-0abc123def4567890
+```
+
+The ID of the image depends on the region; the console lists the current
+images of Ubuntu, Amazon Linux, and others, and the Deep Learning AMIs come
+with the drivers of the GPUs and CUDA. `--key-name` names an SSH key that was
+created or imported in the region, by which `ssh -i lab.pem ubuntu@<address>`
+logs in, with `ec2-user` instead of `ubuntu` on Amazon Linux. A security group,
+the firewall of the instance, has to allow SSH, and only from the address of
+the person who logs in.
+
+Record the instance type, the ID of the image, and the region with the results
+they produced, together with the image of the container the code ran in
+([](../containers/index.qmd#sec-record)). Copy results to S3 before
+terminating an instance: its disk goes with it.

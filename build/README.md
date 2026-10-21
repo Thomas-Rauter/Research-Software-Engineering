@@ -44,4 +44,6 @@ the disk space, run `docker image rm rse-site`.
    name of its PDF (see AGENTS.md).
 2. Run `make site`, or `make preview` while writing.
 3. Commit the source. The sidebar and the overview page of the part list the
-   new document by themselves.
+   new document by themselves, except the first document of a job in
+   `tools/`, whose folder the sidebar in `_quarto.yml` names by hand (see
+   AGENTS.md).

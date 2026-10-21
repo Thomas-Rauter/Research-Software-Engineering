@@ -30,8 +30,30 @@ website:
       contents: principles
     - title: Languages
       contents: languages
+    # Tools lists its jobs by hand, by their full names and in the order of
+    # the table in tools/index.qmd. A job without a document has no folder
+    # yet and gets `contents: tools/<folder>/*` with its first one.
     - title: Tools
-      contents: tools
+      contents:
+        - section: Tools
+          href: tools/index.qmd
+          contents:
+            - section: Cloud computing
+              contents: tools/cloud/*
+            - section: Containers
+              contents: tools/containers/*
+            - section: Data formats and storage
+              contents: tools/data/*
+            - section: Experiment tracking
+              contents: tools/tracking/*
+            - section: HPC scheduling
+              contents: tools/scheduling/*
+            - section: Services
+              contents: tools/services/*
+            - section: Version control and CI
+              contents: []
+            - section: Workflow managers
+              contents: []
 
 # Documents number their sections; the overview pages turn this off.
 number-sections: true

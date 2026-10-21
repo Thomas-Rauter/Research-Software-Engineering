@@ -1,0 +1,219 @@
+---
+title: Parquet
+description: >-
+  What a research software engineer needs to know about Parquet: how it stores
+  a table column by column and what follows from that, and how to read, query,
+  write, and inspect Parquet files from Python, R, and SQL.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: Parquet
+---
+
+# What Parquet is {#sec-overview .unnumbered}
+
+Parquet is a file format for tables: named columns, each of one type. Unlike
+CSV, it stores a table column by column rather than row by row, and almost
+everything that makes it small, fast, or surprising follows from that
+(@sec-storage). Working with it comes down to reading and writing files, and to
+querying a file or a directory of files without loading them whole
+(@sec-usage).
+
+Parquet has no program of its own; libraries read and write it. This document
+uses Polars and pandas in Python, the package arrow in R, and DuckDB, which
+queries Parquet files with SQL from any of these languages and from the command
+line. Most of them build on Apache Arrow, the same columnar layout in memory.
+
+Parquet holds tables. Arrays of more dimensions, such as images or fields on a
+grid, belong in [](hdf5.qmd) or [](zarr.qmd).
+
+Checked against pyarrow 26.0, pandas 3.0, Polars 2.0, DuckDB 1.5, and arrow
+25.0 for R.
+
+
+# How Parquet stores a table {#sec-storage}
+
+A CSV file stores a table row by row: every value of the first row, then every
+value of the second. Parquet stores it column by column. A file is cut into row
+groups, slices of typically a hundred thousand to a million rows, and within a
+row group the values of each column lie together, in a column chunk that is
+compressed on its own. A footer at the end of the file holds the schema, the
+position of every chunk, and statistics of each: its minimum, its maximum, and
+its number of nulls. A reader reads the footer first, and then only the chunks
+it needs.
+
+The values of one column are alike, so they compress well. A value that
+repeats, such as the name of a site, is stored once and referred to by a small
+number; a run of equal values is stored as the value and its length; and a
+general compression follows, Snappy in pandas and zstd in Polars. A Parquet file
+is typically several times smaller than the same table as CSV, and much faster
+to read, because nothing is parsed from text.
+
+
+## Read only what you need {#sec-columns}
+
+The cost of reading a Parquet file grows with the columns read, not with the
+columns in the file: reading 3 of 200 columns reads only their chunks. A reader
+skips whole row groups too, when their statistics show that no row can match a
+filter: a query for one week skips every row group whose times all lie outside
+it. The statistics help only where the values of a column are clustered, so
+sort a table by the column that queries filter on, such as time or site, before
+writing it.
+
+The other side is that reading one row touches a chunk of every column, and
+each chunk has to be decompressed. Parquet suits reading many rows of a few
+columns, as an analysis does, not looking up single records, as a database
+does.
+
+
+## The types travel with the data {#sec-types}
+
+The schema gives every column its type, so a reader gets back what was
+written: integers stay integers, a station code such as `007` stays a string
+with its leading zeros, a float keeps every bit, and a timestamp keeps its
+precision and whether it refers to UTC. Every column, of any type, can hold
+nulls, and in a column of floats a null is not NaN: the two stay apart. Parquet
+so avoids most of what text formats lose
+([](../../principles/design.qmd#sec-hand-off)), although a library may still
+change the types when it reads a file, as pandas does (@sec-read-write).
+
+Parquet does not store meaning. It has no type for a physical unit: put the
+unit into the name of the column, such as `depth_m`, or into the metadata,
+pairs of keys and values that a file and each of its columns may carry. pyarrow
+keeps the metadata, but a round trip through pandas or Polars drops it, so a
+unit that only the metadata holds is easily lost.
+
+
+## Write once, never edit {#sec-write-once}
+
+A Parquet file cannot be changed in place: no value changed, no row appended,
+no column added. The chunks are compressed and the footer that locates them
+comes last, so every change rewrites the file. Data that grows, such as
+measurements that arrive every day, goes into new files, which a dataset joins
+into one table (@sec-datasets).
+
+Because the footer comes last, a file whose writing was interrupted has none,
+and every reader fails on it instead of reading half a table as a valid one
+([](../../principles/design.qmd#sec-loud)).
+
+
+## Datasets: many files, one table {#sec-datasets}
+
+A dataset is a directory of Parquet files with the same columns, which the
+readers treat as one table. It is usually partitioned: its files lie in
+directories named after the values of a column, such as
+`measurements/site=north/`, and the readers take the column from the path. A
+query that filters on that column skips whole directories. Partition by a
+column with few values that queries filter on, such as site or year. Thousands
+of small files are slower to read than a few large ones, because each file has
+a footer of its own to read.
+
+A path is text, so the readers guess the type of a partition column from it.
+pandas, pyarrow, and Polars take a directory `station=007` for the integer 7,
+which loses the leading zeros and no longer matches the station `007` in other
+tables ([](../../principles/design.qmd#sec-no-guess)); DuckDB keeps it as a
+string. Give the type when reading, such as
+`hive_schema={"station": pl.String}` in Polars, or partition only by columns
+whose values cannot be mistaken. Do not rely on the order of the rows across
+the files of a dataset; sort when order matters.
+
+
+# Working with Parquet {#sec-usage}
+
+The libraries do the same few things under different names. Each one reads a
+single file and a dataset alike.
+
+
+## Read and write a file {#sec-read-write}
+
+```python
+import pandas as pd
+import polars as pl
+
+samples = pl.read_parquet("samples.parquet", columns=["sample_id", "depth_m"])
+samples.write_parquet("depths.parquet")
+
+samples = pd.read_parquet("samples.parquet", columns=["sample_id", "depth_m"],
+                          dtype_backend="pyarrow")
+samples.to_parquet("depths.parquet", index=False)
+```
+
+```r
+library(arrow)
+
+samples <- read_parquet("samples.parquet", col_select = c(sample_id, depth_m))
+write_parquet(samples, "depths.parquet")
+```
+
+Name the columns to read (@sec-columns). pandas, with its default types from
+NumPy, reads an integer column with nulls as floats and both nulls and NaN as
+NaN, so a round trip through pandas changes the file: the integers come back as
+floats, and the NaN as nulls. `dtype_backend="pyarrow"` keeps the types of the
+file. `index=False` keeps the index of pandas out of the file; otherwise, after
+a filter for example, other libraries read it as an extra column,
+`__index_level_0__`. pandas compresses with Snappy unless told otherwise;
+`compression="zstd"` gives smaller files.
+
+
+## Query without loading {#sec-query}
+
+```python
+measurements = (
+    pl.scan_parquet("measurements/")
+    .filter(pl.col("site") == "north")
+    .select("time", "temperature_c")
+    .collect()
+)
+```
+
+```r
+library(dplyr)
+
+measurements <- open_dataset("measurements/") |>
+  filter(site == "north") |>
+  select(time, temperature_c) |>
+  collect()
+```
+
+```sql
+SELECT time, temperature_c
+FROM 'measurements/*/*.parquet'
+WHERE site = 'north';
+```
+
+A lazy query, `scan_parquet` in Polars, `open_dataset` in R, or SQL in DuckDB,
+reads only the columns and the row groups that its selection and its filter
+need (@sec-columns), so it handles even a table larger than memory, as long as
+the result fits. In pandas, `read_parquet` takes `columns` and `filters`, such
+as `filters=[("site", "==", "north")]`. DuckDB runs the same SQL on the command
+line, as `duckdb -c "SELECT …"`.
+
+
+## Write a dataset {#sec-write-dataset}
+
+| Library | Writes a dataset partitioned by `site` |
+|----------|--------------------------------------------------------------------|
+| Polars | `df.write_parquet("measurements/", partition_by="site")` |
+| pandas | `df.to_parquet("measurements/", partition_cols=["site"])` |
+| R arrow | `write_dataset(df, "measurements/", partitioning = "site")` |
+| DuckDB | `COPY t TO 'measurements' (FORMAT parquet, PARTITION_BY (site))` |
+
+To add data to a dataset, write a new file into the directory of its partition,
+such as one file a month into `measurements/site=north/` (@sec-write-once).
+
+
+## Look inside a file {#sec-inspect}
+
+```bash
+duckdb -c "DESCRIBE 'samples.parquet'"                  # its columns, types
+duckdb -c "FROM parquet_metadata('samples.parquet')"    # its row groups
+duckdb -c "FROM parquet_kv_metadata('samples.parquet')" # its metadata
+```
+
+A Parquet file describes itself: the footer gives its columns, their types, the
+row groups, and their statistics, without reading the data. In Python,
+`pyarrow.parquet.read_schema` shows the columns, the types, and the metadata,
+and `read_metadata` the row groups. A step that reads a file can so check it
+against the schema it expects
+([](../../principles/design.qmd#sec-hand-off)).

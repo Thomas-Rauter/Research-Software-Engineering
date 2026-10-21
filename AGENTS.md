@@ -19,8 +19,8 @@ parts:
   organized by job, not by tool: containers (Apptainer, Docker), workflow
   managers (Nextflow, Snakemake), HPC scheduling (Slurm), cloud computing
   (AWS), data formats and storage (Parquet, HDF5, Zarr), experiment tracking
-  (MLflow), services (FastAPI), and version control and continuous
-  integration (Git, GitHub Actions).
+  (MLflow), services (FastAPI), and version control and CI (Git, GitHub
+  Actions).
 
 The line between the last two: a tool tied to one language, such as uv,
 renv, pytest, or testthat, belongs to the document of its language; a tool
@@ -282,9 +282,13 @@ The first documents are `tools/containers/index.qmd` and
   specific to its tool and cites the job document for the rest. The PDFs are
   named after the job and the tool, such as `Containers.pdf` and
   `Apptainer.pdf`. `tools/index.qmd` lists the
-  jobs and their tools in a table, linked where a document exists; add the
-  links when you add a document. The sidebar lists the documents of a folder
-  by `order`.
+  jobs and their tools in a table, in alphabetical order of the jobs and
+  linked where a document exists; add the links when you add a document. The
+  sidebar, set by hand in `_quarto.yml`, lists the jobs under the same names
+  and in the same order, including those without a document, and the
+  documents of a folder by `order`. A job without a document has no folder
+  yet; when its first document adds one, point its section in `_quarto.yml`
+  to the folder.
 - The documents of the two parts are short and meant for looking things up,
   so "At a glance" follows the front matter without a page break and lists
   only the rules, without rows for sections.
@@ -459,7 +463,9 @@ Headings carry their identifier and classes: `# Scope {#sec-scope}`,
   site nor the PDFs are committed: the GitHub Action renders and publishes
   them on every push to `main`.
 - A new document needs no entry anywhere else: the sidebar and the overview
-  page of its part list it by its front matter.
+  page of its part list it by its front matter. The one exception is the
+  first document of a job in `tools/` (see "Structure of the languages and
+  the tools").
 
 ## Collaboration
 

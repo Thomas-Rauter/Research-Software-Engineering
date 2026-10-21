@@ -1,0 +1,225 @@
+---
+title: MLflow
+description: >-
+  What a research software engineer needs to know about MLflow: that it is a
+  lab notebook the code writes, with experiments, runs, parameters, metrics,
+  and artifacts, and what follows from that, and how to log runs, compare
+  them, and register and load models.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: MLflow
+---
+
+# About this document {#sec-about .unnumbered}
+
+MLflow is a lab notebook that the code writes. Every time a training or an
+analysis runs, it records what went in, what came out, and the files it made,
+so that runs can be compared later and every result leads back to the run that
+produced it. It records only what the code tells it, and only where the code
+tells it to; almost everything that goes wrong with MLflow follows from that
+(@sec-model). Working with it comes down to logging runs, comparing them, and
+logging and loading models (@sec-usage).
+
+MLflow is written in Python and logs from Python; R and Java have clients as
+well. Besides tracking, MLflow 3 traces and evaluates applications built on
+large language models, which this document leaves out.
+
+Checked against MLflow 3.17.
+
+
+# How MLflow thinks {#sec-model}
+
+MLflow keeps its records in a tracking store, which holds experiments, the
+experiments hold runs, and a run holds four kinds of records. A separate
+registry gives names and versions to the models that runs produced:
+
+```default
+tracking store             mlflow.db, or a tracking server
+    experiment             "melting-point": the runs of one question
+        run                one execution of the code, such as one training
+            parameters     what went in:      learning_rate=0.01, seed=42
+            metrics        what came out:     val_loss at steps 0, 1, 2, ...
+            artifacts      the files it made: model/, residuals.png
+            tags           notes:             git commit, user, run name
+    registered model       "melting-point"
+        version 1          a model logged by a run; alias "champion"
+```
+
+A run is the unit of everything: it has a status, `RUNNING`, `FINISHED`, or
+`FAILED`, and an ID by which a result names the run that produced it.
+
+
+## Parameters, metrics, artifacts, and tags {#sec-records}
+
+Parameters are what went into a run, such as hyperparameters, the seed, and the
+path of the data. A parameter is set once per run and cannot change its value
+afterwards, and it is stored as text: `0.01` comes back as the string `"0.01"`,
+and a sort of parameters puts `"10"` before `"9"`. Convert them to numbers
+before comparing them.
+
+Metrics are numbers that came out of a run, and each can be logged many times,
+with a step, such as the loss after every epoch, which the user interface
+shows as a curve. Artifacts are files, such as a trained model, a plot, or a
+table of predictions, and are stored apart from the other records, in an
+artifact store. Tags are notes, such as a description, and MLflow sets some
+itself: the user, the script, and the commit of the code.
+
+
+## It records only what the code tells it {#sec-only-what-logged}
+
+MLflow knows nothing that the code does not log. A seed that is not logged, an
+input file named only by its path, and a default of a library that was not
+passed explicitly are all missing from the run, and two runs that differ only
+in them look the same. Log every parameter that the result depends on,
+including the defaults and the seed
+([](../../principles/design.qmd#sec-traceability)), and the data with
+`log_input`, which stores a digest of their contents (@sec-log). Autologging
+logs the parameters of the model, with its defaults, but neither the data nor
+the seeds of the code around it (@sec-autolog).
+
+MLflow tags a run with the commit of the Git repository it was started from,
+but it does not check whether the code has uncommitted changes. A run started
+from a changed working tree carries the commit of code that never ran.
+Commit before a run that counts, or log the output of `git diff` as an
+artifact.
+
+
+## Where the records go {#sec-store}
+
+The tracking URI says where the records go. Without one, MLflow writes into a
+SQLite database `mlflow.db` and a directory `mlruns/` for the artifacts, in the
+current working directory: a script started from another directory writes
+into another database, and the earlier runs seem to be gone. Set the tracking
+URI explicitly, to an absolute path or a server (@sec-log).
+
+A SQLite database is one file, written by one process at a time. On the network
+file systems of clusters, its locking is unreliable, and many jobs that log at
+once should log to a tracking server instead (@sec-server), which also lets a
+team share its runs.
+
+A run whose process is killed, such as a job that exceeds its time or memory
+limit, never ends: it stays `RUNNING` for good, with the metrics up to the
+moment it was killed. Compare only runs with the status `FINISHED`
+(@sec-compare). A run that ends with an exception in a `with` block is marked
+`FAILED`.
+
+
+## Models and the registry {#sec-registry}
+
+A logged model is a directory of artifacts: the model in the format of its
+library, a file `MLmodel` that says how to load it, the packages it needs, in
+`requirements.txt` and `conda.yaml`, and an example of its input. Any logged
+model loads as a generic model with a `predict` method, whatever library made
+it.
+
+The registry gives a model a name and numbered versions, each a model logged by
+some run, and aliases, such as `champion`, that point to a version. Code that
+loads `models:/melting-point@champion` gets whichever version the alias points
+to today, which can change tomorrow, like the tag of a container image
+([](../containers/index.qmd#sec-record)). Record the number of the version with
+the results, not the alias.
+
+
+# Working with MLflow {#sec-usage}
+
+The examples log a model that predicts melting points. The same functions log
+any computation whose runs are worth comparing, such as a simulation or a fit.
+
+
+## Log a run {#sec-log}
+
+```python
+import mlflow
+
+mlflow.set_tracking_uri("sqlite:////project/ocean/mlflow.db")
+mlflow.set_experiment("melting-point")
+
+with mlflow.start_run(run_name="baseline"):
+    mlflow.log_params({"learning_rate": 0.01, "n_layers": 3, "seed": 42})
+    data = mlflow.data.from_pandas(train, source="data/train.parquet")
+    mlflow.log_input(data, context="training")
+    for epoch in range(n_epochs):
+        mlflow.log_metric("val_loss", train_one_epoch(), step=epoch)
+    mlflow.log_artifact("residuals.png")
+```
+
+A SQLite URI takes three slashes before a relative path and four before an
+absolute one, as here. The environment variable `MLFLOW_TRACKING_URI` sets the
+URI without changing the code, such as in a job script. `set_experiment`
+creates the experiment if it does not exist. The `with` block ends the run, as
+`FINISHED` or, after an exception, as `FAILED`.
+
+
+## Log automatically {#sec-autolog}
+
+```python
+mlflow.sklearn.autolog()
+model = Ridge(alpha=0.5).fit(X_train, y_train)   # logged as a run
+```
+
+Autologging, for scikit-learn, PyTorch Lightning, XGBoost, and other
+libraries, or `mlflow.autolog()` for all of them, logs the parameters of the
+model, including its defaults, the metrics of the training, and the model
+itself, without a call in the code. It logs what the library sees, not the
+data or the seeds of the code around it (@sec-only-what-logged), and it logs
+the model even when the code logs it as well, unless `log_models=False`.
+
+
+## Compare runs {#sec-compare}
+
+```python
+runs = mlflow.search_runs(
+    experiment_names=["melting-point"],
+    filter_string="attributes.status = 'FINISHED' and metrics.val_loss < 0.1",
+    order_by=["metrics.val_loss ASC"],
+)
+```
+
+`search_runs` returns a table of pandas, with a row per run and columns such as
+`params.seed`, `metrics.val_loss`, and `tags.mlflow.source.git.commit`, for
+analysis in code. `mlflow ui`, started in the directory of `mlflow.db`, or with
+`--backend-store-uri`, shows the runs in a browser at `http://localhost:5000`,
+with their curves side by side. A run left `RUNNING` by a killed process can be
+marked with `MlflowClient().set_terminated(run_id, status="KILLED")`.
+
+
+## Log, register, and load a model {#sec-models}
+
+```python
+from mlflow import MlflowClient
+
+info = mlflow.sklearn.log_model(model, name="model", input_example=X_train[:5])
+version = mlflow.register_model(info.model_uri, "melting-point")
+MlflowClient().set_registered_model_alias(
+    "melting-point", "champion", version.version
+)
+
+model = mlflow.pyfunc.load_model("models:/melting-point@champion")
+```
+
+`log_model` logs the model inside the current run, and `register_model` makes
+it a new version of a registered model. `pyfunc.load_model` loads any model
+with a `predict` method, whatever library made it; `mlflow.sklearn.load_model`
+loads the original object of scikit-learn. A model loads by its version as
+well, as `models:/melting-point/1`.
+
+
+## Run a tracking server {#sec-server}
+
+```bash
+mlflow server \
+    --backend-store-uri postgresql://mlflow@db.lab.example/mlflow \
+    --artifacts-destination s3://lab-mlflow-artifacts \
+    --host 127.0.0.1 --port 5000
+```
+
+A tracking server keeps the records of a team, or of many jobs, in a database,
+such as PostgreSQL, and the artifacts in a store, such as a bucket of S3
+([](../cloud/aws.qmd#sec-s3)). The clients set their tracking URI to its
+address, such as `http://mlflow.lab.example:5000`, and send everything through
+it. The server answers only on the machine itself, unless `--host` names
+another address, and by default it asks for no login: start it with
+`--app-name basic-auth` for users and passwords, put it behind a web server
+that asks for them, or reach it through an SSH tunnel.
