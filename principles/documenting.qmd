@@ -116,6 +116,7 @@ principle.
 | **[-@sec-true]** | **[](#sec-true)** | |
 | [-@sec-docs-as-code] | [](#sec-docs-as-code) | Keep the documentation in the repository, change it with the code, build it on every change, and publish it per version. |
 | [-@sec-examples] | [](#sec-examples) | Run every example on every change, and check the output it shows. |
+| [-@sec-numbers] | [](#sec-numbers) | Back every claim about speed, accuracy, or robustness with numbers that the reader can reproduce, or mark it as unverified. |
 | [-@sec-timeless] | [](#sec-timeless) | Write what stays true without upkeep: take facts of the code from the code, and date what holds only at a moment. |
 :::
 
@@ -507,6 +508,43 @@ package or are generated from a fixed seed. Where an example needs real data
 that are too large to ship, download them from an archive with a persistent
 identifier, check them against a stored checksum, and keep a copy for the
 build, so that the documentation does not break when a server moves.
+
+
+## Talk is cheap, show me the numbers {#sec-numbers}
+
+Back every claim in the documentation that numbers can check with numbers that
+the reader can reproduce: a table, a plot, or a script. This holds for claims
+about speed and memory, accuracy and bias, convergence, robustness, and
+agreement with other software, and for statements such as "the approximation is
+negligible" or "the method has been validated". In computation it is easy to
+argue one's way to a claim and then treat it as established: the estimator is
+unbiased, the error term is small, the algorithm is O(n log n) and therefore
+fast. The argument has its place in the explanation of the method
+(@sec-diataxis), but it shows what the method does under its assumptions, not
+what this implementation does on the data of the users. A reader can dispute an
+assumption without end. Numbers can be disputed only for their setup, and the
+setup can be inspected. Users act on documentation, so a claim that sounds
+proven and is not does the damage of a wrong number.
+
+Numbers count if they can be checked. Measure on data of the kind that users
+have, not only on cases that suit the method. Check accuracy against an oracle
+that does not come from the code ([](testing.qmd#sec-oracle)), not against the
+software itself. State the setup beside the numbers: data, parameters, seed,
+versions, and for timings the hardware. Give the spread for anything random or
+timed, and show where the software fails as well as where it works, since users
+need the limits. A claim that no numbers can express, such as "robust" or
+"intuitive", should give way to what has been shown, such as "converges on all
+40 problems of the test set".
+
+Keep the numbers as true as the claim. Generate them from a script in the
+repository instead of typing them, and run the script when the documentation is
+built where that is cheap (@sec-docs-as-code). Where a run is too expensive,
+store its result and state the version and the date it holds for
+(@sec-timeless), because a measured speed is a fact about one version. Where no
+measurement is feasible, write "expected from theory, not verified" instead of
+the bare claim, or drop it. *Design Principles* says what to measure for scale
+and cost ([](design.qmd#sec-size-matters)); this principle is about how the
+documentation presents what was measured.
 
 
 ## Documentation should age like wine, not like milk {#sec-timeless}
