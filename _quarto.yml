@@ -16,7 +16,7 @@ website:
   title: Research Software Engineering
   site-url: https://thomas-rauter.github.io/Research-Software-Engineering/
   repo-url: https://github.com/Thomas-Rauter/Research-Software-Engineering
-  favicon: favicon.svg
+  favicon: favicon.png
   navbar:
     left:
       - text: Principles

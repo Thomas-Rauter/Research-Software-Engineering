@@ -99,7 +99,7 @@ consistency, and tightening the prose.
 - `Makefile`, `build/Dockerfile`, and `.github/workflows/publish.yml` render
   and publish the site; `build/README.md` explains how. `README.md` is the
   README of the repository, not a page of the site.
-- `favicon.svg` is the icon of the website.
+- `favicon.png` is the icon of the website.
 - `logos/` holds the logos of the languages and the tools, one SVG each,
   named like the document it belongs to, such as `logos/python.svg` for
   `languages/python.qmd`; `logos/README.md` says where each comes from
