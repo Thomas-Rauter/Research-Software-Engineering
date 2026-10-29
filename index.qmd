@@ -1,5 +1,6 @@
 ---
 title: Research Software Engineering
+image: favicon.png
 format: html
 number-sections: false
 toc: false

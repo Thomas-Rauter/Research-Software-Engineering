@@ -1,10 +1,11 @@
 /*-- scss:defaults --*/
 
-// The blue of the PDFs, for links, headings, and the navigation bar.
-$primary: #003399;
+// The blue of the RSE symbol, in the shade it uses for its shadows, for
+// links and rules; a slate gray for headings and the navigation bar.
+$primary: #0e6c87;
 $link-color: $primary;
-$headings-color: $primary;
-$navbar-bg: $primary;
+$headings-color: #22303a;
+$navbar-bg: #22303a;
 
 // The background of a logo: none on a light page.
 $logo-bg: transparent;
