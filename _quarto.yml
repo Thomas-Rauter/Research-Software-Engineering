@@ -18,6 +18,9 @@ website:
   repo-url: https://github.com/Thomas-Rauter/Research-Software-Engineering
   favicon: favicon.png
   navbar:
+    logo: favicon.png
+    logo-alt: Research Software Engineering
+    title: false
     left:
       - text: Principles
         href: principles/index.qmd

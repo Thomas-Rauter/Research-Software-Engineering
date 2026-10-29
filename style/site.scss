@@ -2,6 +2,11 @@
 
 // The rules for both color schemes. $primary is the blue of the scheme.
 
+// The symbol in the navigation bar, which stands for the title of the site.
+.navbar-brand-logo img.navbar-logo {
+  max-height: 2.25rem;
+}
+
 // Headings of sections and subsections, smaller than the title.
 main.content h1:not(.title) {
   margin-top: 2.5rem;

@@ -39,10 +39,10 @@ one of the file, not of the trademark.
 
 | File | Source | License of the file | Changes |
 |------------------|--------------------------------------------|------------------|----------------------------|
-| `python.svg` | Simple Icons 16.35.0, `python` | CC0 1.0 | Fill set to the brand color `#3776AB` |
+| `python.svg` | Wikimedia Commons, `File:Python-logo-notext.svg` (the two-color logo of Python) | Public domain, as stated there | XML header and unused namespaces removed |
 | `r.svg` | Simple Icons 16.35.0, `r` | CC0 1.0 | Fill `#276DC3` |
 | `bash.svg` | Simple Icons 16.35.0, `gnubash` | CC0 1.0 | Fill `#4EAA25` |
-| `sql.svg` | Lucide 1.60.0, `database`; SQL has no logo of its own | ISC | Stroke `#4B6584` instead of `currentColor` |
+| `sql.svg` | Redrawn as SVG from `SQL_logo.png`, a logo of SQL downloaded by the author | As the PNG; unknown | Only the database symbol, without the word, in the color of the PNG |
 | `apptainer.svg` | `docs/logos/apptainer_v3.svg` in github.com/apptainer/apptainer | See the repository | None |
 | `aws.svg` | Simple Icons 14.0.0, `amazonwebservices`; later versions do not have it | CC0 1.0 | Fill `#232F3E` |
 | `docker.svg` | Simple Icons 16.35.0, `docker` | CC0 1.0 | Fill `#2496ED` |

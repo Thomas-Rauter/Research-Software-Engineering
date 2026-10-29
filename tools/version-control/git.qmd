@@ -34,7 +34,23 @@ release a name that others can cite
 ([](../../principles/design.qmd#sec-traceability)). [](github-actions.qmd)
 runs the tests on every commit pushed to GitHub.
 
+The rule of this document, on what a commit should hold (@sec-atomic), uses the
+[normative language](../../principles/design.qmd#sec-normative) of *Design
+Principles*.
+
 Checked against Git 2.56.
+
+
+# At a glance {#sec-at-a-glance .unnumbered}
+
+Every rule of this document in one line. The number and the title link to the
+rule.
+
+::: {.glance}
+| No. | Rule | In one line |
+|-----|------------------------------|----------------------------------------------------|
+| [-@sec-atomic] | [](#sec-atomic) | Make each commit one change that leaves the project working, and keep refactoring, changes of results, and formatting in commits of their own. |
+:::
 
 
 # How Git thinks {#sec-model}
@@ -109,7 +125,7 @@ nor ever restores it.
 The index lets a commit hold less than everything that changed, such as one fix
 while another change waits, and `git add -p` adds the changes of a file hunk by
 hunk. A commit that does one thing can be reviewed, reverted, and found again
-when it changed a result (@sec-bisect).
+when it changed a result (@sec-atomic).
 
 
 ## A branch is a name that moves {#sec-branches}
@@ -288,6 +304,40 @@ after an empty line, says why the change was made, since the diff already shows
 what changed ([](../../principles/documenting.qmd#sec-comments)).
 
 
+## Atomic commits: one commit, one change {#sec-atomic}
+
+A commit should hold one change and leave the project working: the tests pass
+and the workflow runs. A commit that cannot be described in one sentence
+without an "and" is two commits. Commit when a step is finished, not when the
+day ends or when the editor has saved something.
+
+The rest of Git works on the history that this makes. `git bisect` tests the
+commits between a good and a bad one and cannot judge those that do not run
+(@sec-bisect); `git revert` takes back one change without taking another along;
+a reviewer reads one idea at a time; and the hash of a commit names code that
+ran, which is what makes a result traceable
+([](../../principles/design.qmd#sec-traceability)).
+
+What goes into one commit, and what into two:
+
+- **Together**: a change of behavior, its tests, and its documentation
+  ([](../../principles/documenting.qmd#sec-docs-as-code)), with the entry in the
+  changelog. A reference output that the change moves goes into the same commit,
+  and the message says why the numbers moved
+  ([](../../principles/testing.qmd#sec-snapshots)).
+- **Apart**: refactoring and a change of behavior. A refactoring leaves every
+  result as it was, so the tests alone show that it is one; if numbers move in
+  it, it was not. A change that moves numbers also goes in a commit of its own,
+  so that the difference in a result can be traced to it. A reformatting of
+  whole files, finally, buries the real change in `git blame` and `git diff`,
+  and goes in a commit of its own as well.
+
+`git add -p` stages the hunks of a commit when the working tree holds more than
+one change, and `git diff --staged` shows what the commit will hold. Work in
+progress may be committed early, on a branch of your own (@sec-reflog), but
+rewrite those commits into atomic ones before they are pushed (@sec-rewrite).
+
+
 ## Look at the history {#sec-history}
 
 ```bash
@@ -407,4 +457,4 @@ The script compares the result with its expected value within a tolerance
 ([](../../principles/testing.qmd#sec-float-tests)), and lies outside the
 history, such as in another directory, so that the same check runs on every
 commit. The search is fastest on a history of small commits that each work
-(@sec-index).
+(@sec-atomic).
