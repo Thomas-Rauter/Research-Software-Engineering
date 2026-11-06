@@ -1,0 +1,23 @@
+---
+title: Essays
+format: html
+number-sections: false
+listing:
+  contents: "*.qmd"
+  type: grid
+  grid-columns: 2
+  max-description-length: 1000
+  sort: order
+  fields: [title, description]
+---
+
+Essays explain the ideas behind the guidelines. The principles, the languages,
+and the tools are made for looking things up while working; an essay is made
+to be read once, from start to finish, to understand why. It shows how rules
+that are stated in different places follow from one idea, why the idea matters
+for research software, and where it reaches its limits. In the terms of
+Diátaxis, the essays are explanation
+([](../principles/documenting.qmd#sec-diataxis)).
+
+An essay states no rules. Where it touches one, it cites the principle, the
+language, or the tool that states it, so that each rule stays in one place.

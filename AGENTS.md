@@ -4,7 +4,7 @@
 
 *Research Software Engineering*, a website of documents written in Quarto
 and published on the repository's GitHub Pages. Every document is also
-rendered as a PDF that readers can download and keep. The site has three
+rendered as a PDF that readers can download and keep. The site has four
 parts:
 
 - **Principles**: how to design, test, and document research software, in
@@ -21,12 +21,16 @@ parts:
   (AWS), data formats and storage (Parquet, HDF5, Zarr), experiment tracking
   (MLflow), services (FastAPI), and version control and CI (Git, GitHub
   Actions).
+- **Essays**: the ideas behind the guidelines, explained at length, such as
+  *The Art of Composable Primitives*. The other three parts are for looking
+  things up while working; an essay is read once, from start to finish, to
+  understand why. Essays state no rules (see "Structure of the essays").
 
-The line between the last two: a tool tied to one language, such as uv,
-renv, pytest, or testthat, belongs to the document of its language; a tool
-that does a job whatever the language belongs to the tools. A tool written
-for one language but chosen for its job, such as FastAPI for serving a
-model, goes with its job.
+The line between the languages and the tools: a tool tied to one language,
+such as uv, renv, pytest, or testthat, belongs to the document of its
+language; a tool that does a job whatever the language belongs to the tools.
+A tool written for one language but chosen for its job, such as FastAPI for
+serving a model, goes with its job.
 
 The main document is *Design Principles for Research Software*: guidelines
 for research software in the broadest sense, in academia and in industry,
@@ -78,8 +82,8 @@ consistency, and tightening the prose.
 
 ## Files
 
-- `principles/`, `languages/`, and `tools/` hold the documents of the three
-  parts, one `.qmd` file each, and the source of truth; `tools/` has a
+- `principles/`, `languages/`, `tools/`, and `essays/` hold the documents of
+  the four parts, one `.qmd` file each, and the source of truth; `tools/` has a
   folder per job. All edits go here,
   for example to `principles/design.qmd`, `principles/testing.qmd`,
   `principles/documenting.qmd`, or `principles/test-types.qmd`. Figures go
@@ -333,6 +337,46 @@ The first documents are `tools/containers/index.qmd` and
 - Tools change faster than principles and languages, so each tool document
   states the versions of the tools it was last checked against, and each
   language document the version of the language.
+
+## Structure of the essays
+
+The first essay is `essays/composable-primitives.qmd`.
+
+- An essay explains an idea that runs through the guidelines: how rules
+  stated in different places follow from it, why it matters for research
+  software, and where it reaches its limits. The other parts are reference,
+  made for looking things up; an essay is explanation, made to be read from
+  start to finish, in the sense of the Diátaxis section of the documentation
+  guide. This, not the absence of rules, is the line: *Types of Research
+  Software Tests* states no rules either, but it is looked up, so it stays in
+  Principles.
+- An essay states no rules. It uses no *must*, *should*, *prefer*, or *avoid*
+  of its own; where it touches a rule, it cites the principle, the language,
+  or the tool that states it, by title. If writing an essay turns up a new
+  rule, the rule goes into the document where it belongs, and the essay
+  cites it there.
+- The principles cite an essay where its idea comes up, so that readers of
+  the rules find it, as "Library code and workflow code" and "Build from the
+  ground up" cite *The Art of Composable Primitives*.
+- An essay has no "At a glance" and no front-matter section such as "About
+  this essay". It opens with an introduction without a heading, then
+  numbered sections, and subsections where a section has distinct parts.
+  Each heading states what its section argues, such as "Options multiply,
+  primitives add", and has an identifier like every heading.
+- An essay is technical writing, not a story: formal, with one term for each
+  concept, kept in the headings and the text even where it repeats, and the
+  terms of *Design Principles* where they exist, such as *side effect*. Define
+  a term of the essay once, as *The Art of Composable Primitives* defines
+  *primitive* and *compose*, and do not vary it. Avoid figurative phrases
+  where a plain term exists.
+- An essay may name the established sources of its idea, such as books and
+  talks, and tell history, and it may use code examples. Keep them short, as
+  in the languages and the tools, and give them in more than one language
+  where the point is not tied to one, such as Python and then R, one block
+  after the other. Do not use tabsets: in the PDF they become numbered
+  subsections.
+- `order` sorts the essays in the sidebar and in `essays/index.qmd`, as in
+  the other parts, and the PDF is named after the title.
 
 ## Writing a principle
 

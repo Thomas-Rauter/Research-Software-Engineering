@@ -1,0 +1,398 @@
+---
+title: The Art of Composable Primitives
+description: >-
+  Many of the design principles are aspects of one idea: research software is
+  best built from primitives that its callers compose. What makes primitives
+  composable, where to cut a method into primitives, and where a composition of
+  correct primitives still gives a wrong number, with small examples in Python
+  and R.
+order: 1
+format:
+  html: default
+  pdf:
+    output-file: The_Art_of_Composable_Primitives
+---
+
+Many principles of [](../principles/design.qmd) are aspects of one idea.
+Library code provides primitives and leaves the program to its caller. It takes
+and returns the data types of the host stack, does not touch global state, does
+not modify its arguments, does not print or plot, and does not guess. A method
+is built from the primitives of its steps, and the convenient function is a
+short composition of them. Each of these is a rule of its own, stated in the
+principle where it applies. This essay explains what the rules have in common.
+
+In this essay, a primitive is a unit of code that carries out one step: a
+function that removes the baseline of a spectrum, computes a distance matrix,
+or fits a model, or a workflow step or a command-line tool that does one job.
+To compose primitives is to pass the result of one primitive to the next, in
+the caller's code. Primitives are composable when a caller can compose them in
+an order and a number that their authors did not foresee, and each primitive
+still does what it promises. The essay states no rules; where it refers to a
+rule, it cites the principle that states it.
+
+
+# The next analysis is unknown {#sec-next-analysis}
+
+If the next analysis were known, it would not be research. A package for
+spectra will be applied to kinds of spectra that its authors never measured,
+used with baseline corrections that they did not implement, and run inside
+workflows that they have never seen. No set of options anticipates these
+requirements, because they are not known when the package is written. What a
+package can provide instead is composable primitives, from which its callers
+build the analyses that its authors did not plan.
+
+Composition supports the checks that research applies to its own results. A
+reviewer asks whether a result holds under another normalization; an ablation
+study removes one step of a method at a time; a sensitivity analysis varies one
+step and holds the others fixed. If the method is a composition of primitives,
+each of these checks replaces one primitive in the caller's code. If the method
+is one block, each check requires a copy of the package's code, which then
+drifts from the original ([](../principles/design.qmd#sec-dry)).
+
+Composition also makes correctness checkable. A primitive that carries out one
+step can be checked against one equation, and known answers exist mostly for
+such small steps ([](../principles/testing.qmd#sec-known-answers)). A
+composition of checked primitives can then be verified line by line, and a
+failing test identifies the primitive that broke. One block can be checked only
+as a whole, against the few cases in which the answer for the whole method is
+known.
+
+
+# Primitives, composition, abstraction {#sec-mechanisms}
+
+*Structure and Interpretation of Computer Programs*, by Abelson and Sussman,
+opens with the three mechanisms that every powerful language has: primitive
+expressions, which are the simplest entities; means of combination, by which
+compound elements are built from simpler ones; and means of abstraction, by
+which compound elements are named and used as units. The same three mechanisms
+describe a package of research software, with composition in the place of
+combination:
+
+- **Primitives** are the steps of the method, as functions or as workflow
+  steps, together with the functions of the host stack that the package uses.
+- **Composition** takes place in the caller's code: a script, a notebook, a
+  shell pipeline, a workflow.
+- **Abstraction** gives a name to a composition that callers need often, such
+  as a convenient function, a command, or a workflow. The named composition is
+  a primitive of the layer above ([](../principles/design.qmd#sec-layers)).
+
+The three mechanisms work together because of what the book calls the closure
+property: the result of a composition is of the same kind as its arguments, so
+it can be composed again. The ufuncs of NumPy and the vectorized functions of R
+take arrays and return arrays, so their calls can be nested. The verbs of dplyr
+take a data frame and return a data frame, so they can be chained with `|>`, as
+the methods of pandas and Polars can be chained with a dot. A `Pipeline` of
+scikit-learn is itself an estimator, so it can be passed to a grid search or
+included in another pipeline. A Unix pipeline reads and writes streams as each
+of its commands does, and a subworkflow of Nextflow is called like a single
+process. A package has the closure property when the results of its primitives
+are valid arguments of its primitives.
+
+
+# What makes primitives composable {#sec-composable}
+
+Primitives that are correct individually are not necessarily composable. Six
+properties make them composable, and each property is the subject of one or
+more principles.
+
+
+## Common data types {#sec-data-types}
+
+Primitives are composable when the result of one primitive is a valid argument
+of the next, without conversion. The data types that make this possible at the
+lowest cost are those of the host stack: its arrays and data frames, including
+sparse, lazy, and chunked ones, which the other packages of the host stack also
+take and return ([](../principles/design.qmd#sec-follow-types)). Every data
+type that a package introduces is accepted only by that package, and every
+caller has to write glue code to convert it. A data type of the package is
+justified where it protects an invariant, as a fitted model does, and it costs
+its callers least when it converts to the data types of the host stack and
+back.
+
+A data type that inherits from a data type of the host stack claims to be that
+data type, with every operation and every convention of the original. If it
+does not keep all of them, code written for the original runs on it and gives
+a different result. For this reason, the Liskov principle prefers wrapping a
+data type of the host stack to inheriting from it
+([](../principles/design.qmd#sec-substitution)).
+
+
+## No hidden inputs {#sec-hidden-inputs}
+
+A primitive is composable when its result depends only on its arguments. Every
+other input is a hidden input: the global random number generator, a setting at
+module level, a variable that another function sets, a file at a fixed path. A
+hidden input makes the result of a primitive depend on what ran before it in
+the same process, so that the result of a composition depends on more than the
+composition. Two primitives that draw from the global random number generator
+return different numbers when they are called in the opposite order, and two
+analyses in the same session change each other's results.
+
+The principles remove the hidden inputs. Randomness enters as an argument, a
+generator or a seed that the caller passes
+([](../principles/design.qmd#sec-reproducibility)), and the modules of a
+package depend on each other only through what they promise
+([](../principles/design.qmd#sec-modules)). A primitive without hidden inputs
+is also the simplest to test: the test passes the arguments and checks the
+result, and nothing else has to be set up
+([](../principles/testing.qmd#sec-isolated)).
+
+
+## No side effects {#sec-side-effects}
+
+A primitive is composable when its return value is its only effect. Every other
+effect is a side effect: modifying an argument, changing a setting of the
+process, printing, plotting, writing a file. A return value can still be
+printed, plotted, written to a file, tested, or passed to the next primitive;
+a printed value can only be read. A side effect also removes a decision from
+the caller: where a figure or a file goes, in which format, and whether it is
+produced at all.
+
+The principles remove the side effects from library code. Library code leaves
+the settings of the process unchanged
+([](../principles/design.qmd#sec-global-state)), returns new data instead of
+modifying its arguments ([](../principles/design.qmd#sec-mutation)), does no
+work when it is loaded ([](../principles/design.qmd#sec-import)), and leaves
+reading and writing files to its caller
+([](../principles/design.qmd#sec-no-files)). It returns results that separate
+functions plot ([](../principles/design.qmd#sec-plotting)), and it reports
+problems through the warnings and errors of the host stack, which the caller
+controls ([](../principles/design.qmd#sec-output)). Side effects belong in
+workflow code, which owns the program and its output.
+
+
+## Mechanism, not policy {#sec-mechanism}
+
+*The Art of Unix Programming*, by Eric Raymond, states a rule of separation:
+separate policy from mechanism. Mechanism is what a primitive can do, such as
+smoothing a signal with a window of any width; policy is what an analysis does
+with the mechanism, such as smoothing with a window of eleven samples.
+Mechanism is composable, because any policy can be built on it. Policy is not,
+because the next analysis requires a different policy.
+
+In research software, policy consists of the scientific choices: thresholds,
+normalizations, which outliers to remove, how to treat missing values. A
+primitive takes these choices as arguments and leaves them to the caller,
+instead of making them internally ([](../principles/design.qmd#sec-explicit))
+or inferring them from the data ([](../principles/design.qmd#sec-no-guess)). A
+default is a policy that the API offers without imposing it, and it is part of
+the API ([](../principles/design.qmd#sec-numeric-defaults)). Library code is
+mechanism; workflow code, with its configuration, is policy.
+
+
+## The caller owns the program {#sec-caller-program}
+
+Where a method needs code from its caller, such as an objective function or the
+right-hand side of a differential equation, library code takes that code as a
+function argument and calls it, as `scipy.optimize.minimize(fun, x0)` in Python
+and `optim(par, fn)` in R do. The caller's function remains an ordinary
+function, which the caller can test on its own, reuse, and pass to another
+optimizer.
+
+A framework inverts this relation. It owns the program, including the solver or
+simulation loop, requires its caller to subclass its classes or to register
+code with it, and calls that code at points that it determines
+([](../principles/design.qmd#sec-library)). Library code is composable with
+other library code, because each is called and returns. Two frameworks are not
+composable, because each requires ownership of the program, and code written
+for one does not run in the other. A plugin is code written for a host
+application that owns the program, with the disadvantages that
+[](../principles/design.qmd#sec-plugins) describes.
+
+
+## The same conventions in every primitive {#sec-same-conventions}
+
+Primitives that agree on data types can still disagree on conventions. One
+primitive puts time on the first axis and the next one on the last; one takes
+angles in degrees and the next one returns radians; one counts the positions on
+a genome from 0 and the next one from 1; one removes missing values and the
+next one propagates them. A composition of such primitives runs without an
+error and gives a plausible wrong number
+([](../principles/design.qmd#sec-loud)).
+
+In a package whose primitives are composable, every primitive uses the same
+axis order, the same units, and the same argument names, so that a caller who
+knows the conventions of one primitive knows those of all
+([](../principles/design.qmd#sec-conventions)), and every primitive treats
+missing values in the same way ([](../principles/design.qmd#sec-missing)).
+Between packages, the conventions of the host stack apply, and a primitive that
+replaces another keeps all conventions of the original.
+
+
+# Options multiply, primitives add {#sec-options}
+
+The usual way to make a function serve more analyses is to add an option. Each
+option appears inexpensive, but options multiply: a function with five options
+that can be on or off has 32 behaviors, each of which needs documentation and a
+test, and the interactions of the options are decided inside the function,
+where the caller cannot see them. Is the baseline removed before or after
+smoothing? Is the normalization applied to the smoothed spectrum or to the raw
+spectrum? And the function still cannot do what its authors did not foresee: a
+caller who requires another smoother needs a sixth option.
+
+Primitives add instead. Five steps are five primitives, each tested on its own;
+their order is written in the caller's code, where a reader sees it; and a
+primitive of the caller's own replaces one of them without a change to the
+package. The following example implements a peak finder for spectra in both
+ways, first in Python and then in R:
+
+```python
+# Options: each combination of options is a path inside the function.
+peaks = detect_peaks(spectrum, baseline=True, smooth=True, normalize=True)
+
+# Primitives: the caller determines the order and chooses the smoother.
+s = remove_baseline(spectrum)
+s = scipy.signal.savgol_filter(s, window_length=11, polyorder=3)
+peaks = detect_peaks(normalize(s))
+```
+
+```r
+# Options: each combination of options is a path inside the function.
+peaks <- detect_peaks(spectrum, baseline = TRUE, smooth = TRUE,
+                      normalize = TRUE)
+
+# Primitives: the caller determines the order and chooses the smoother.
+peaks <- spectrum |>
+  remove_baseline() |>
+  signal::sgolayfilt(p = 3, n = 11) |>
+  normalize() |>
+  detect_peaks()
+```
+
+This is not an argument against options. The convenient function in the top
+layer keeps a few options for the common case, provided that it is a short
+composition of public primitives: a caller whose analysis it does not cover
+then uses the layer below instead of copying its implementation
+([](../principles/design.qmd#sec-layers)). The warning sign is an option added
+for a single caller, which [](../principles/design.qmd#sec-wrong-abstraction)
+describes as the mark of a wrong abstraction.
+
+
+# Cut where the paper cuts {#sec-cut}
+
+The central design decision is where to cut a method into primitives, and the
+method itself indicates where. The steps that a methods section lists and the
+equations that a paper numbers are the steps that a reader of the paper can
+check and that a caller is likely to replace
+([](../principles/design.qmd#sec-ground-up)). The steps that callers replace
+most often justify a primitive of their own even when they are small: the
+weighting, the kernel, the distance, the mask, the prior.
+
+A good cut meets three criteria. The primitive has a name that denotes a
+concept of the field, such as baseline, distance matrix, or posterior, not a
+name that describes its position in the code, such as `preprocess2` or
+`helper`. Its arguments and its result are quantities of the field, such as a
+spectrum or a list of peaks, not internal state, such as a buffer that only the
+next primitive can interpret. And it has a known answer of its own.
+
+A cut can also be wrong. Two primitives that are always called together, in the
+same order, and whose intermediate result has no meaning on its own are one
+step cut in two: every caller has to repeat the pair and can call it in the
+wrong order. Cutting finer than the steps of the method adds names without
+adding choices ([](../principles/design.qmd#sec-kiss)), and every public
+primitive is a commitment ([](../principles/design.qmd#sec-stable-api)), which
+is why primitives may remain internal until callers need them.
+
+Callers reveal where a cut is missing. When they copy the implementation of a
+function into their own code to change one line of it, a primitive is missing
+below that function. When they write glue code to convert the result of one
+primitive of the package into an argument of another, a common data type is
+missing. And when they request an option, they often need a primitive.
+
+
+# Correct primitives, wrong composition {#sec-wrong-composition}
+
+Composition has a limit that is specific to numerical code: a composition of
+correct primitives can give a wrong result. The variance is the mean of the
+squares minus the square of the mean, and both means are computed correctly in
+the following code, first in Python and then in R:
+
+```python
+x = 1e9 + np.array([1.0, 2.0, 3.0])
+np.mean(x**2) - np.mean(x)**2    # 0.0
+np.mean((x - np.mean(x))**2)     # 0.6666666666666666
+```
+
+```r
+x <- 1e9 + c(1, 2, 3)
+mean(x^2) - mean(x)^2            # 0
+mean((x - mean(x))^2)            # 0.6666667
+```
+
+The squares lie near $10^{18}$, where adjacent floating-point numbers are 128
+apart, and their difference of 2/3 is lost in the subtraction. The second line
+composes the same primitives in a different order, centering before squaring,
+and is accurate. The choice is therefore not between composition and no
+composition, but between compositions. Some compositions are so common and so
+unstable that the host stacks provide them as primitives of their own:
+`log1p(x)` for `log(1 + x)`, `expm1(x)` for `exp(x) - 1`, and `logsumexp` in
+SciPy or `logSumExp` in the R package matrixStats for `log(sum(exp(x)))`
+([](../principles/design.qmd#sec-stability)). These functions are not
+shortcuts: the fused function is the correct primitive, and the composition
+that it replaces is the defect. Composing well therefore includes recognizing a
+composition that has to be a primitive.
+
+Errors also propagate through a composition. Each primitive can be accurate to
+its tolerance while the composition is not, because a later primitive amplifies
+the error of an earlier one to the extent that its problem is ill-conditioned
+([](../principles/design.qmd#sec-convergence)). A tolerance that holds for each
+primitive therefore says little about their composition, which needs a test and
+a tolerance of its own ([](../principles/testing.qmd#sec-float-tests)).
+
+Composition also has a cost in time and memory: each primitive materializes its
+intermediate result, which a fused function does not store. Fusing primitives
+into one function is therefore a legitimate optimization, and the composition
+of the primitives remains useful as a second opinion for the fused function
+([](../principles/testing.qmd#sec-second-opinion)). In either form, expensive
+operations remain visible in the caller's code
+([](../principles/design.qmd#sec-cost)).
+
+
+# Workflow steps are primitives too {#sec-workflows}
+
+The Unix philosophy, in the words of Doug McIlroy: write programs that do one
+thing and do it well; write programs to work together; write programs to handle
+text streams, because that is a universal interface. The first two sentences
+hold unchanged for the steps of a research workflow. The third has a research
+form: the universal interfaces are the standard file formats of a field, such
+as BAM, NetCDF, or Parquet, and a workflow step that reads and writes them is
+composable with every other tool that reads and writes them
+([](../principles/design.qmd#sec-hand-off)). The properties of @sec-composable
+carry over to workflow steps: a file that a step reads without declaring it is
+a hidden input, and a file that it writes without declaring it is a side effect
+([](../principles/design.qmd#sec-declared-inputs)). The workflow manager
+composes the steps as a shell composes commands.
+
+The division between library code and workflow code recurs inside each
+workflow step. A command-line tool that does one job is library code behind a
+thin layer of workflow code ([](../principles/design.qmd#sec-package)), an
+arrangement that Gary Bernhardt named *functional core, imperative shell*. The
+core computes, from arguments to return values, and is simple to test and to
+compose. The shell parses the command-line arguments, reads and writes the
+files, and writes the log, and it remains thin enough to be checked by running
+it on a small dataset ([](../principles/design.qmd#sec-end-to-end)). The
+properties that make the core composable are the properties that keep the shell
+thin.
+
+
+# Questions to ask of a primitive {#sec-questions}
+
+Composability becomes evident in use, so a primitive is best examined by
+calling it as its callers will. The following questions reveal most defects
+before a caller encounters them:
+
+- Can it be called twice in succession, with the same result both times?
+- Can it be called on a subset of the data, on one chunk, or in parallel with
+  itself?
+- Does it run without reading or writing a file, and without printing or
+  plotting?
+- Can it be called from a test, with nothing set up except its arguments?
+- Can its result be passed to the next primitive of the package without
+  conversion?
+- If it is a composition of other primitives, can a caller replace one of them
+  without copying the others?
+- Does its name denote a concept of the field?
+- Is every quantity that affects its result an argument?
+
+A negative answer indicates that one of the properties of @sec-composable is
+missing, or that the cut is in the wrong place (@sec-cut).

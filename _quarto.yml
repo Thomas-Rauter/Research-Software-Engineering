@@ -28,6 +28,8 @@ website:
         href: languages/index.qmd
       - text: Tools
         href: tools/index.qmd
+      - text: Essays
+        href: essays/index.qmd
     right:
       - icon: github
         href: https://github.com/Thomas-Rauter/Research-Software-Engineering
@@ -62,6 +64,8 @@ website:
               contents: tools/version-control/*
             - section: Workflow managers
               contents: tools/workflows/*
+    - title: Essays
+      contents: essays
 
 # Documents number their sections; the overview pages turn this off.
 number-sections: true

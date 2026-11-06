@@ -107,7 +107,8 @@ analysis workflow. Where the method needs code from the user, such as an
 objective function, a model, or the right-hand side of a differential equation,
 accept it as an ordinary function argument. Requiring users to subclass package
 classes or to register code with a package-managed lifecycle turns library code
-into a framework on top of the host stack.
+into a framework on top of the host stack. What makes primitives composable is
+the subject of [](../essays/composable-primitives.qmd).
 
 ::: {.definitionbox}
 **Library code** is called and returns. Its caller decides how the work is
@@ -1296,7 +1297,9 @@ PyTorch computed its multi-head attention with an internal function for scaled
 dot-product attention and made that function public in version 2.0. In R,
 `lm` is built on the public `lm.fit`, which takes the design matrix directly
 instead of a formula and a data frame. Public primitives form the lower layers
-of the API (@sec-layers).
+of the API (@sec-layers). Where to cut a method into primitives, and where a
+composition of correct primitives still gives a wrong number, is explained in
+[](../essays/composable-primitives.qmd).
 
 
 ## Avoid plotting in core functionality {#sec-plotting}

@@ -22,4 +22,5 @@ values, and reproducibility.
 stand beside it, and the three form one set of guidelines, with the normative
 language, the ladder, and the terminology of *Design Principles*.
 [](test-types.qmd) defines the terms of testing for all of them. The languages
-and the tools apply these principles and cite them.
+and the tools apply these principles and cite them, and the
+[essays](../essays/index.qmd) explain the ideas behind them.

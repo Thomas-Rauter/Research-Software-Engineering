@@ -4,7 +4,7 @@ Notes on research software engineering, published as a website with a PDF of
 every document:
 <https://thomas-rauter.github.io/Research-Software-Engineering/>
 
-The site has three parts:
+The site has four parts:
 
 - **Principles**: how to design, test, and document research software, in any
   programming language and with any tools.
@@ -12,6 +12,8 @@ The site has three parts:
   SQL, and Bash.
 - **Tools**: the tools that research software is run, stored, tracked, and
   served with, organized by job.
+- **Essays**: the ideas behind the guidelines, to be read from start to finish
+  rather than looked up.
 
 The sources are Quarto documents. `make site` renders the website and the
 PDFs into `_site/`, and a GitHub Action publishes them on every push to

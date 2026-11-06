@@ -8,10 +8,11 @@ toc: false
 
 Notes on research software engineering: how to design, test, and document
 research software, how to write it in the programming languages it is written
-in, and how to use the tools it is run with. They cover research software in
-the broadest sense, in academia and in industry, from the one-off script of a
-PhD student to the libraries and workflows that a community or a company
-relies on. Every document can be read here or downloaded as a PDF.
+in, and how to use the tools it is run with, together with essays on the ideas
+behind them. They cover research software in the broadest sense, in academia
+and in industry, from the one-off script of a PhD student to the libraries and
+workflows that a community or a company relies on. Every document can be read
+here or downloaded as a PDF.
 
 
 ## [Principles](principles/index.qmd)
@@ -34,3 +35,11 @@ tooling.
 How to use the tools that research software is run, stored, tracked, and served
 with, whatever its language, organized by job: containers, workflow managers,
 scheduling, cloud computing, data formats, experiment tracking, and services.
+
+
+## [Essays](essays/index.qmd)
+
+The ideas behind the guidelines, explained at length and meant to be read from
+start to finish, such as why research software is best built from primitives
+that its callers compose. The essays state no rules; they cite the principles,
+the languages, and the tools that do.
